@@ -239,10 +239,16 @@ const PatientChatDetailsScreen: React.FC = () => {
       
       const content = textToSend || (attachmentType === 'image' ? '[Image]' : '[Document]');
       
-      // Use the proper API method signature (conversationId, text, recipientId)
+      // Instead of creating a conversation ID format, just send the UUID directly
+      // This ensures we send the actual UUID stored in the user object
+      console.log('Sending message with params:', {
+        conversationId: user.id, // Use the actual user UUID here
+        text: content,
+        recipientId: doctorId
+      });
+      
       const response = await chatService.sendMessage(
-        // For patient chat, we'll use the combination of patient+doctor IDs as conversationId
-        `${user.id}_${doctorId}`,
+        user.id, // Send the actual UUID, not a formatted conversation ID
         content,
         doctorId
       );

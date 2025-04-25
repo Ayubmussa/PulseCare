@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { appointmentService, doctorService, patientService } from '../../services/api';
+import { appointmentService, staffService, patientService } from '../../services/api';
 
 // Define types for the data structures
 interface Appointment {
@@ -88,8 +88,11 @@ const StaffHomeScreen = () => {
       const today = new Date();
       const todayFormatted = today.toISOString().split('T')[0];
       
-      // Fetch today's appointments
-      const appointmentsResponse = await appointmentService.getAppointmentsByDateRange(todayFormatted, todayFormatted);
+      // Use staff-specific endpoints for better authorization and separation of concerns
+      const appointmentsResponse = await staffService.getStaffAppointments({
+        date: todayFormatted
+      });
+      
       setTodayAppointments(appointmentsResponse.length);
       
       // Filter pending appointments
@@ -97,7 +100,7 @@ const StaffHomeScreen = () => {
       setPendingAppointments(pending.length);
       
       // Fetch upcoming appointments for display
-      const upcomingResponse = await appointmentService.getAppointmentsByDateRange(todayFormatted, '');
+      const upcomingResponse = await staffService.getStaffAppointments();
       const upcoming = upcomingResponse
         .filter((apt: Appointment) => apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'checked-in')
         .sort((a: Appointment, b: Appointment) => {
@@ -106,8 +109,8 @@ const StaffHomeScreen = () => {
         .slice(0, 3); // Get the first 3
       setUpcomingAppointments(upcoming);
       
-      // Fetch doctors and count available ones for today
-      const doctorsResponse = await doctorService.getAllDoctors();
+      // Fetch doctors using staff-specific endpoint
+      const doctorsResponse = await staffService.getAllDoctors();
       // In a real app, you would filter doctors who are available today
       // For now, we'll just count all active doctors
       const availableDocs = doctorsResponse.filter((doc: Doctor) => doc.status === 'active');
@@ -233,6 +236,7 @@ const StaffHomeScreen = () => {
       <View style={styles.statsContainer}>
         <View style={styles.statsRow}>
           <TouchableOpacity
+            key="stats-today-appointments"
             style={styles.statsCard}
             onPress={navigateToAppointments}
           >
@@ -244,6 +248,7 @@ const StaffHomeScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity
+            key="stats-pending-appointments"
             style={styles.statsCard}
             onPress={navigateToAppointments}
           >
@@ -257,6 +262,7 @@ const StaffHomeScreen = () => {
 
         <View style={styles.statsRow}>
           <TouchableOpacity
+            key="stats-available-doctors"
             style={styles.statsCard}
             onPress={navigateToDoctors}
           >
@@ -268,6 +274,7 @@ const StaffHomeScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity
+            key="stats-total-patients"
             style={styles.statsCard}
             onPress={() => navigation.navigate('ManagePatients')}
           >
@@ -285,6 +292,7 @@ const StaffHomeScreen = () => {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsContainer}>
           <TouchableOpacity 
+            key="action-appointments"
             style={styles.actionButton}
             onPress={() => navigation.navigate('ManageAppointments')}
           >
@@ -295,6 +303,7 @@ const StaffHomeScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity 
+            key="action-doctors"
             style={styles.actionButton}
             onPress={() => navigation.navigate('ManageDoctors')}
           >
@@ -305,6 +314,7 @@ const StaffHomeScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity 
+            key="action-patients"
             style={styles.actionButton}
             onPress={() => navigation.navigate('ManagePatients')}
           >
@@ -315,6 +325,7 @@ const StaffHomeScreen = () => {
           </TouchableOpacity>
           
           <TouchableOpacity 
+            key="action-clinic-info"
             style={styles.actionButton}
             onPress={navigateToClinicInfo}
           >
@@ -408,6 +419,7 @@ const StaffHomeScreen = () => {
 
       {/* Clinic Information */}
       <TouchableOpacity 
+        key="clinic-info-card"
         style={styles.clinicInfoCard}
         onPress={navigateToClinicInfo}
       >

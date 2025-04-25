@@ -47,6 +47,7 @@ interface TimeSlots {
 // Define the route params
 interface RouteParams {
   doctorId: string;
+  rescheduleAppointmentId?: string;
 }
 
 const PatientBookAppointmentScreen = () => {
@@ -56,6 +57,8 @@ const PatientBookAppointmentScreen = () => {
   
   // Check if route.params exists before destructuring
   const doctorId = route.params?.doctorId;
+  const rescheduleAppointmentId = route.params?.rescheduleAppointmentId;
+  const isRescheduling = !!rescheduleAppointmentId;
   
   const [isLoading, setIsLoading] = useState(true);
   const [doctor, setDoctor] = useState<Doctor | null>(null);
@@ -218,26 +221,42 @@ const PatientBookAppointmentScreen = () => {
     try {
       setIsLoading(true);
       
+      // Combine date and time into a single date_time field
+      const dateStr = selectedDay ? formatDateForAPI(selectedDay.date) : '';
+      const timeStr = selectedTimeSlot.startTime; // Using startTime from timeSlot
+      const dateTime = `${dateStr}T${timeStr}`;
+      
       const appointmentData = {
-        patientId: user?.id,
-        doctorId: doctorId,
-        date: selectedDay ? formatDateForAPI(selectedDay.date) : '',
-        timeSlotId: selectedTimeSlot.id,
-        appointmentType: appointmentType,
+        patient_id: user?.id,         // Changed from patientId to patient_id
+        doctor_id: doctorId,          // Changed from doctorId to doctor_id
+        date_time: dateTime,          // Combined date and time into date_time
+        appointment_type: appointmentType, // Updated for consistency (optional field)
         status: 'scheduled'
       };
       
-      // Create appointment via API
-      await appointmentService.createAppointment(appointmentData);
-      
-      Alert.alert(
-        'Appointment Confirmed',
-        `Your appointment with ${doctor?.name || 'the doctor'} is scheduled for ${selectedDay?.month || ''} ${selectedDay?.dayNum || ''} at ${selectedTimeSlot.time}.`,
-        [{ 
-          text: 'OK', 
-          onPress: () => navigation.navigate('Appointments') 
-        }]
-      );
+      if (isRescheduling) {
+        // Update existing appointment via API
+        await appointmentService.updateAppointment(rescheduleAppointmentId, appointmentData);
+        Alert.alert(
+          'Appointment Rescheduled',
+          `Your appointment with ${doctor?.name || 'the doctor'} has been rescheduled to ${selectedDay?.month || ''} ${selectedDay?.dayNum || ''} at ${selectedTimeSlot.time}.`,
+          [{ 
+            text: 'OK', 
+            onPress: () => navigation.navigate('Appointments') 
+          }]
+        );
+      } else {
+        // Create new appointment via API
+        await appointmentService.createAppointment(appointmentData);
+        Alert.alert(
+          'Appointment Confirmed',
+          `Your appointment with ${doctor?.name || 'the doctor'} is scheduled for ${selectedDay?.month || ''} ${selectedDay?.dayNum || ''} at ${selectedTimeSlot.time}.`,
+          [{ 
+            text: 'OK', 
+            onPress: () => navigation.navigate('Appointments') 
+          }]
+        );
+      }
     } catch (error) {
       console.error('Failed to book appointment:', error);
       Alert.alert('Error', 'Failed to book appointment. Please try again later.');
@@ -281,7 +300,7 @@ const PatientBookAppointmentScreen = () => {
       {/* Doctor Info */}
       <View style={styles.doctorContainer}>
         <View style={styles.doctorInfo}>
-          <Text style={styles.title}>Book Appointment</Text>
+          <Text style={styles.title}>{isRescheduling ? 'Reschedule Appointment' : 'Book Appointment'}</Text>
           <View style={styles.doctorRow}>
             <View>
               <Text style={styles.doctorName}>{doctor?.name}</Text>
@@ -462,7 +481,7 @@ const PatientBookAppointmentScreen = () => {
         {isLoading ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Text style={styles.confirmButtonText}>Confirm Appointment</Text>
+          <Text style={styles.confirmButtonText}>{isRescheduling ? 'Reschedule Appointment' : 'Confirm Appointment'}</Text>
         )}
       </TouchableOpacity>
     </ScrollView>

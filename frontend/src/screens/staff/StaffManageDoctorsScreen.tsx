@@ -24,14 +24,21 @@ interface Doctor {
   name: string;
   specialty?: string;
   image?: string;
+  imageUrl?: string; // Added for backend compatibility
   rating?: string;
   patients?: string;
   isAvailable?: boolean;
   phoneNumber?: string;
+  phone?: string; // Added for backend compatibility
   email?: string;
   workDays?: string;
   status: 'pending' | 'approved' | 'rejected' | 'active' | 'inactive';
   registeredAt?: string;
+  yearsExperience?: number;
+  education?: string;
+  languages?: string[];
+  bio?: string;
+  licenseNumber?: string;
 }
 
 interface Specialty {
@@ -83,17 +90,29 @@ const StaffManageDoctorsScreen: React.FC = () => {
       
       // Use staffService instead of doctorService to get all doctors including pending registrations
       const doctorsData = await staffService.getAllDoctors();
-      setDoctors(doctorsData);
+      
+      // Transform data to handle different field names
+      const normalizedDoctors = doctorsData.map((doctor: any) => ({
+        ...doctor,
+        // Handle image field variations
+        image: doctor.imageUrl || doctor.image || null,
+        // Handle phone field variations
+        phoneNumber: doctor.phone || doctor.phoneNumber || null,
+        // Ensure status is in expected format
+        status: doctor.status || 'pending',
+      }));
+      
+      setDoctors(normalizedDoctors);
       
       // Count pending approvals
-      const pendingCount = doctorsData.filter(
+      const pendingCount = normalizedDoctors.filter(
         (doctor: Doctor) => doctor.status === 'pending'
       ).length;
       setPendingApprovals(pendingCount);
       
       // Extract unique specialties from the doctor data
       const uniqueSpecialties = new Set<string>();
-      doctorsData.forEach((doctor: Doctor) => {
+      normalizedDoctors.forEach((doctor: Doctor) => {
         if (doctor.specialty) {
           uniqueSpecialties.add(doctor.specialty);
         }

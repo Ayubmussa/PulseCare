@@ -209,52 +209,43 @@ const loginPatient = async (req, res) => {
 // Reset patient password
 const resetPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, newPassword } = req.body;
     
     // Basic validation
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
     }
     
+    if (!newPassword) {
+      return res.status(400).json({ message: 'New password is required' });
+    }
+    
     // Check if patient exists
-    const { data, error } = await supabase
+    const { data: patient, error: findError } = await supabase
       .from('patients')
       .select('id, email')
       .eq('email', email)
       .single();
     
-    if (error) throw error;
+    if (findError) throw findError;
     
-    if (!data) {
+    if (!patient) {
       return res.status(404).json({ message: 'Patient not found' });
     }
     
-    // In a real application, we would:
-    // 1. Generate a secure reset token
-    // 2. Store it in the database with an expiry time
-    // 3. Send an email to the user with a link containing the token
-    
-    // For now, we'll simulate the process
-    const resetToken = 'patient_reset_' + Math.random().toString(36).substring(2, 15);
-    
-    // Store the reset token (would typically be in a separate table with expiry)
-    const { error: updateError } = await supabase
+    // Update the password directly
+    const { data, error } = await supabase
       .from('patients')
-      .update({ reset_token: resetToken, reset_token_expires: new Date(Date.now() + 3600000).toISOString() })
-      .eq('id', data.id);
+      .update({ password: newPassword })
+      .eq('id', patient.id);
     
-    if (updateError) throw updateError;
-    
-    // In a real application, send an email here
-    console.log(`Reset token for patient ${data.email}: ${resetToken}`);
+    if (error) throw error;
     
     res.status(200).json({ 
-      message: 'Password reset instructions sent to email',
-      // In production, don't return the token in the response
-      // The token is returned here for testing purposes
-      debug: { resetToken } 
+      message: 'Password has been reset successfully'
     });
   } catch (error) {
+    console.error('Password reset error:', error);
     res.status(500).json({ error: error.message });
   }
 };

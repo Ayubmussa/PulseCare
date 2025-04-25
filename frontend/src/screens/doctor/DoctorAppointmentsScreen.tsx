@@ -230,9 +230,12 @@ const DoctorAppointmentsScreen: React.FC = () => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.actionButton, styles.secondaryButton]}
-                  onPress={() => navigation.navigate('ChatDetails', { 
-                    patientId: item.patientId, 
-                    patientName: item.patientName 
+                  onPress={() => navigation.getParent()?.navigate('Chat', { 
+                    screen: 'ChatDetails',
+                    params: {
+                      patientId: item.patientId, 
+                      patientName: item.patientName 
+                    }
                   })}
                 >
                   <Ionicons name="chatbubble-outline" size={16} color="#007bff" />

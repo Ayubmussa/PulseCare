@@ -169,42 +169,46 @@ const loginStaff = async (req, res) => {
 // Reset staff password
 const resetPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, newPassword } = req.body;
     
     // Basic validation
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
     }
     
+    if (!newPassword) {
+      return res.status(400).json({ message: 'New password is required' });
+    }
+    
     // Check if staff exists
-    const { data, error } = await supabase
+    const { data: staff, error: findError } = await supabase
       .from('staff')
       .select('id, email')
       .eq('email', email)
       .single();
     
-    if (error) throw error;
+    if (findError) throw findError;
     
-    if (!data) {
+    if (!staff) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
     
-    // In a real application, generate and send reset token via email
-    const resetToken = 'staff_reset_' + Math.random().toString(36).substring(2, 15);
+    // Hash the new password using bcrypt
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
     
-    // Store the reset token
-    const { error: updateError } = await supabase
+    // Update the password directly
+    const { data, error } = await supabase
       .from('staff')
-      .update({ reset_token: resetToken, reset_token_expires: new Date(Date.now() + 3600000).toISOString() })
-      .eq('id', data.id);
+      .update({ password: hashedPassword })
+      .eq('id', staff.id);
     
-    if (updateError) throw updateError;
+    if (error) throw error;
     
-    res.status(200).json({
-      message: 'Password reset instructions sent to email',
-      debug: { resetToken }
+    res.status(200).json({ 
+      message: 'Password has been reset successfully'
     });
   } catch (error) {
+    console.error('Staff password reset error:', error);
     res.status(500).json({ error: error.message });
   }
 };

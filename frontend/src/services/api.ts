@@ -108,7 +108,7 @@ export const authService = {
       throw error;
     }
   },
-  resetPassword: async (email: string, userType: 'patient' | 'doctor' | 'staff') => {
+  resetPassword: async (email: string, userType: 'patient' | 'doctor' | 'staff', newPassword: string) => {
     try {
       // Determine the endpoint based on user type
       let endpoint: string;
@@ -127,7 +127,7 @@ export const authService = {
           throw new Error('Invalid user type');
       }
 
-      const { data } = await api.post(endpoint, { email });
+      const { data } = await api.post(endpoint, { email, newPassword });
       return data;
     } catch (error) {
       throw error;
@@ -267,9 +267,26 @@ export const appointmentService = {
   },
   updateAppointment: async (id: string, appointmentData: any) => {
     try {
-      const { data } = await api.put(`/appointments/${id}`, appointmentData);
-      return data;
+      console.log(`API: Updating appointment ${id} with data:`, appointmentData);
+      
+      // Make the API call
+      const response = await api.put(`/appointments/${id}`, appointmentData);
+      console.log(`API: Update appointment ${id} successful, response:`, response.data);
+      
+      return response.data;
     } catch (error) {
+      console.error(`API: Failed to update appointment ${id}:`, error);
+      
+      // Provide more detailed error information
+      if (axios.isAxiosError(error)) {
+        console.error('API Error Details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          message: error.message
+        });
+      }
+      
       throw error;
     }
   },
@@ -287,6 +304,38 @@ export const appointmentService = {
       return data;
     } catch (error) {
       throw error;
+    }
+  },
+  getPatientAppointments: async (patientId: string) => {
+    try {
+      const { data } = await api.get(`/appointments/patient/${patientId}`);
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  cancelAppointment: async (id: string) => {
+    try {
+      console.log(`API: Cancelling appointment ${id}`);
+      
+      // Make a dedicated call for cancellation
+      const response = await api.put(`/appointments/${id}/cancel`, { status: 'cancelled' });
+      console.log(`API: Cancel appointment ${id} success response:`, response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error(`API: Failed to cancel appointment ${id}:`, error);
+      
+      // Handle errors but attempt a direct update as fallback
+      try {
+        console.log(`API: Attempting fallback direct update for appointment ${id}`);
+        const fallbackResponse = await api.put(`/appointments/${id}`, { status: 'cancelled' });
+        console.log(`API: Fallback success for appointment ${id}:`, fallbackResponse.data);
+        return fallbackResponse.data;
+      } catch (fallbackError) {
+        console.error(`API: Fallback also failed for appointment ${id}:`, fallbackError);
+        throw fallbackError;
+      }
     }
   },
 };
@@ -319,10 +368,19 @@ export const staffService = {
     }
   },
 
+  getDoctorRegistrations: async () => {
+    try {
+      const { data } = await api.get('/staff/manage/doctors/registrations');
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   approveDoctor: async (doctorId: string, staffId: string, comments?: string) => {
     try {
       const { data } = await api.put(`/staff/manage/doctors/${doctorId}/approve`, {
-        staff_id: staffId,
+        staffId,
         comments,
       });
       return data;
@@ -334,7 +392,7 @@ export const staffService = {
   rejectDoctor: async (doctorId: string, staffId: string, reason: string) => {
     try {
       const { data } = await api.put(`/staff/manage/doctors/${doctorId}/reject`, {
-        staff_id: staffId,
+        staffId,
         reason,
       });
       return data;
@@ -352,7 +410,35 @@ export const staffService = {
     try {
       const { data } = await api.put(`/staff/manage/doctors/${doctorId}/status`, {
         status,
-        staff_id: staffId,
+        staffId,
+        reason,
+      });
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Patient Management
+  getAllPatients: async () => {
+    try {
+      const { data } = await api.get('/staff/manage/patients');
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  updatePatientStatus: async (
+    patientId: string,
+    status: 'active' | 'inactive',
+    staffId: string,
+    reason?: string
+  ) => {
+    try {
+      const { data } = await api.put(`/staff/manage/patients/${patientId}/status`, {
+        status,
+        staffId,
         reason,
       });
       return data;
@@ -382,7 +468,7 @@ export const staffService = {
     }
   },
 
-  getStaffAppointmentById: async (id: string) => {
+  getAppointmentById: async (id: string) => {
     try {
       const { data } = await api.get(`/staff/manage/appointments/${id}`);
       return data;
@@ -400,7 +486,7 @@ export const staffService = {
     try {
       const { data } = await api.put(`/staff/manage/appointments/${id}/status`, {
         status,
-        staff_id: staffId,
+        staffId,
         notes,
       });
       return data;
@@ -409,7 +495,7 @@ export const staffService = {
     }
   },
 
-  // Clinic services
+  // Clinic Management
   getClinicInfo: async () => {
     try {
       const { data } = await api.get('/staff/manage/clinic');
@@ -428,7 +514,7 @@ export const staffService = {
     }
   },
 
-  // Staff management
+  // Staff Management
   getAllStaff: async () => {
     try {
       const { data } = await api.get('/staff');
@@ -475,15 +561,23 @@ export const chatService = {
       throw error;
     }
   },
-  sendMessage: async (conversationId: string, text: string, recipientId: string) => {
+  sendMessage: async (senderId: string, text: string, recipientId: string) => {
     try {
-      const { data } = await api.post('/chat/messages', {
-        conversationId,
-        text,
-        recipientId,
-      });
+      console.log(`Sending message with ID ${senderId} to recipient ${recipientId}`);
+      
+      const messageData = {
+        sender_id: senderId,
+        recipient_id: recipientId,
+        sender_type: 'patient',
+        content: text
+      };
+      
+      console.log('Message data being sent:', messageData);
+      
+      const { data } = await api.post('/chat/messages', messageData);
       return data;
     } catch (error) {
+      console.error('Error sending message:', error);
       throw error;
     }
   },
@@ -560,11 +654,63 @@ export const documentService = {
       throw error;
     }
   },
-  uploadDocument: async (documentData: any) => {
+  uploadDocument: async (documentData: any, file?: any) => {
     try {
-      const { data } = await api.post('/documents', documentData);
-      return data;
+      if (file) {
+        // If we have a file, use FormData to handle the upload
+        const formData = new FormData();
+        
+        // Add document metadata
+        Object.keys(documentData).forEach(key => {
+          formData.append(key, documentData[key]);
+        });
+        
+        // Add the file - ensure it's properly formatted for multer on the backend
+        // The file object must contain: uri, type, and name properties
+        if (typeof file === 'object' && file.uri && file.type && file.name) {
+          formData.append('document', file as any);
+          
+          console.log('Uploading document with FormData:', {
+            metadata: documentData,
+            fileInfo: {
+              name: file.name,
+              type: file.type,
+              uriPreview: file.uri.substring(0, 50) + '...' // Log just part of URI for debugging
+            }
+          });
+        } else {
+          console.error('Invalid file object for upload:', file);
+          throw new Error('Invalid file format');
+        }
+        
+        // Need to use a different content type for multipart/form-data
+        const { data } = await api.post('/documents', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        return data;
+      } else {
+        // If we just have metadata, proceed with the standard JSON request
+        const { data } = await api.post('/documents', documentData);
+        return data;
+      }
     } catch (error) {
+      console.error('Error uploading document:', error);
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data;
+        console.error('API Error Details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: responseData,
+          message: error.message
+        });
+        
+        // Throw with more detailed error message
+        if (responseData?.message) {
+          throw new Error(`Upload failed: ${responseData.message}`);
+        }
+      }
       throw error;
     }
   },

@@ -14,7 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { patientService, appointmentService } from '../../services/api';
+import { patientService, appointmentService, staffService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 // Define types for route parameters and navigation
 type RootStackParamList = {
@@ -67,8 +68,11 @@ interface Appointment {
 const StaffPatientDetailsScreen: React.FC = () => {
   const route = useRoute<StaffPatientDetailsRouteProp>();
   const navigation = useNavigation<StaffPatientDetailsNavigationProp>();
+  const { user } = useAuth();
   const { patientId, patientName } = route.params;
   const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
   const [editField, setEditField] = useState<string>('');
   const [editValue, setEditValue] = useState<string>('');
@@ -87,18 +91,27 @@ const StaffPatientDetailsScreen: React.FC = () => {
   const fetchPatientDetails = async (): Promise<void> => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Fetch patient details
+      // Fetch patient details directly from patientService since staffService doesn't have this method
       const patientData = await patientService.getPatientById(patientId);
       setPatient(patientData);
 
-      // Get all appointments and filter for this patient
+      // Get patient's appointments using general appointment service
       const allAppointments = await appointmentService.getAllAppointments();
       const appointments = allAppointments.filter((apt: Appointment) => apt.patientId === patientId);
       
       // Find upcoming appointment
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
       const futureAppointments = appointments
-        .filter((apt: Appointment) => new Date(apt.date).getTime() >= new Date().getTime())
+        .filter((apt: Appointment) => {
+          // Ensure proper date comparison
+          const appointmentDate = new Date(apt.date);
+          return appointmentDate >= today && 
+            (apt.status === 'scheduled' || apt.status === 'confirmed');
+        })
         .sort((a: Appointment, b: Appointment) => 
           new Date(a.date).getTime() - new Date(b.date).getTime()
         );
@@ -109,9 +122,11 @@ const StaffPatientDetailsScreen: React.FC = () => {
       
       // Find last visit (most recent past appointment)
       const pastAppointments = appointments
-        .filter((apt: Appointment) => 
-          new Date(apt.date).getTime() < new Date().getTime() && apt.status === 'completed'
-        )
+        .filter((apt: Appointment) => {
+          // Ensure proper date comparison
+          const appointmentDate = new Date(apt.date);
+          return appointmentDate < today && apt.status === 'completed';
+        })
         .sort((a: Appointment, b: Appointment) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         );
@@ -122,6 +137,7 @@ const StaffPatientDetailsScreen: React.FC = () => {
       
     } catch (error) {
       console.error('Error fetching patient details:', error);
+      setError('Failed to load patient information. Please try again later.');
       Alert.alert('Error', 'Failed to load patient information. Please try again later.');
     } finally {
       setLoading(false);
@@ -135,35 +151,51 @@ const StaffPatientDetailsScreen: React.FC = () => {
   };
 
   const handleSaveEdit = async (): Promise<void> => {
+    if (!patient) {
+      Alert.alert('Error', 'Patient information not available');
+      return;
+    }
+    
     try {
-      if (!patient) return;
+      setSaving(true);
       
       // Create updated patient object with the edited field
-      const updatedPatient = {
-        ...patient,
-        [editField]: editValue
-      };
+      const updateData = { [editField]: editValue };
       
-      // Call the API to update the patient
-      await patientService.updatePatient(patientId, { [editField]: editValue });
+      // Call the API to update the patient using patientService
+      await patientService.updatePatient(patientId, updateData);
       
       // Update local state
-      setPatient(updatedPatient);
-      setEditModalVisible(false);
+      setPatient({
+        ...patient,
+        [editField]: editValue
+      });
       
+      setEditModalVisible(false);
       Alert.alert('Updated', `${editField.charAt(0).toUpperCase() + editField.slice(1)} has been updated successfully.`);
     } catch (error) {
       console.error('Error updating patient:', error);
       Alert.alert('Error', 'Failed to update patient information. Please try again later.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleStatusChange = async (status: 'active' | 'inactive'): Promise<void> => {
+    if (!patient || !user?.id) {
+      Alert.alert('Error', 'Required information is missing');
+      return;
+    }
+    
     try {
-      if (!patient) return;
+      setSaving(true);
       
-      // Call API to update patient status
-      await patientService.updatePatient(patientId, { status });
+      // Use staffService to update patient status (instead of patientService)
+      await staffService.updatePatientStatus(
+        patientId,
+        status,
+        user.id
+      );
       
       // Update local state
       setPatient({
@@ -172,7 +204,6 @@ const StaffPatientDetailsScreen: React.FC = () => {
       });
       
       setStatusModalVisible(false);
-      
       Alert.alert(
         'Status Updated', 
         `Patient status has been changed to ${status.charAt(0).toUpperCase() + status.slice(1)}.`
@@ -180,6 +211,8 @@ const StaffPatientDetailsScreen: React.FC = () => {
     } catch (error) {
       console.error('Error updating patient status:', error);
       Alert.alert('Error', 'Failed to update patient status. Please try again later.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -230,15 +263,16 @@ const StaffPatientDetailsScreen: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Loading patient information...</Text>
       </View>
     );
   }
 
-  if (!patient) {
+  if (error || !patient) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={60} color="#dc3545" />
-        <Text style={styles.errorText}>Failed to load patient information</Text>
+        <Text style={styles.errorText}>{error || 'Failed to load patient information'}</Text>
         <TouchableOpacity 
           style={styles.retryButton} 
           onPress={fetchPatientDetails}
@@ -251,6 +285,12 @@ const StaffPatientDetailsScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container}>
+      {saving && (
+        <View style={styles.savingOverlay}>
+          <ActivityIndicator size="large" color="#ffffff" />
+        </View>
+      )}
+      
       <View style={styles.header}>
         <View style={styles.profileSection}>
           <Image 
@@ -570,6 +610,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555',
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -593,6 +638,17 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  savingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   header: {
     backgroundColor: '#fff',

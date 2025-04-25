@@ -22,16 +22,31 @@ import { staffService } from '../../services/api';
 // Define interfaces for our data structures
 interface Appointment {
   id: string;
-  patientId: string;
-  patientName: string;
-  doctorId: string;
-  doctorName: string;
-  date: string;
-  time: string;
-  status: 'confirmed' | 'checked-in' | 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'no-show';
-  type?: 'regular' | 'urgent' | 'follow-up';
-  department?: string;
+  patient_id: string;
+  patientId: string; // For backwards compatibility
+  patients: {
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+  patientName: string; // For backwards compatibility
+  doctor_id: string;
+  doctorId: string; // For backwards compatibility
+  doctors: {
+    id: string;
+    name: string;
+    specialty?: string;
+  };
+  doctorName: string; // For backwards compatibility
+  date_time: string;
+  date: string; // For backwards compatibility
+  time: string; // For backwards compatibility
+  status: 'scheduled' | 'confirmed' | 'checked-in' | 'completed' | 'cancelled' | 'no-show' | 'pending';
+  type?: string;
   reason?: string;
+  notes?: string;
+  location?: string;
 }
 
 interface FilterParams {
@@ -81,7 +96,27 @@ const StaffManageAppointmentsScreen: React.FC = () => {
     try {
       setLoading(true);
       const data = await staffService.getStaffAppointments();
-      setAppointments(data);
+      
+      // Transform data to match component's expected format
+      const formattedAppointments = data.map((apt: any) => {
+        // Extract date and time from date_time (format: "YYYY-MM-DDThh:mm")
+        const dateTime = new Date(apt.date_time);
+        const formattedDate = dateTime.toISOString().split('T')[0];
+        const formattedTime = dateTime.toTimeString().substring(0, 5);
+        
+        return {
+          ...apt,
+          // Add backwards compatibility fields
+          patientId: apt.patient_id,
+          doctorId: apt.doctor_id,
+          patientName: apt.patients?.name || 'Unknown Patient',
+          doctorName: apt.doctors?.name || 'Unknown Doctor',
+          date: formattedDate,
+          time: formattedTime,
+        };
+      });
+      
+      setAppointments(formattedAppointments);
     } catch (error) {
       console.error('Failed to load appointments:', error);
       Alert.alert('Error', 'Failed to load appointments. Please try again later.');
@@ -394,7 +429,7 @@ const StaffManageAppointmentsScreen: React.FC = () => {
       {/* Add Appointment Button */}
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => navigation.navigate('AddAppointment')}
+        onPress={() => navigation.navigate('ScheduleAppointment')}
       >
         <Ionicons name="add" size={24} color="#fff" />
       </TouchableOpacity>

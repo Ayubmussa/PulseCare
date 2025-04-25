@@ -135,7 +135,10 @@ const DoctorPatientDetailsScreen: React.FC = () => {
   };
 
   const sendMessage = () => {
-    navigation.navigate('ChatDetails', { patientId: actualPatientId, patientName });
+    navigation.getParent()?.navigate('Chat', { 
+      screen: 'ChatDetails', 
+      params: { patientId: actualPatientId, patientName }
+    });
   };
 
   if (isLoading) {

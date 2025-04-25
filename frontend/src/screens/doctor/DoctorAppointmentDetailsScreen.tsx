@@ -13,6 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentService } from '../../services/api';
+import api from '../../services/api';
 
 interface RouteParams {
   id: string;
@@ -53,9 +54,29 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
     try {
       setIsLoading(true);
       
-      const appointmentData = await appointmentService.getAppointmentById(appointmentId);
-      setAppointment(appointmentData);
+      const response = await appointmentService.getAppointmentById(appointmentId);
       
+      // Transform the backend response to match the component's expected format
+      const formattedAppointment = {
+        id: response.id,
+        patientId: response.patient_id,
+        patientName: response.patients?.name || 'Patient',
+        // Extract date and time from date_time field (format: "YYYY-MM-DDThh:mm")
+        date: response.date_time ? response.date_time.split('T')[0] : '',
+        time: response.date_time ? response.date_time.split('T')[1].substring(0, 5) : '00:00',
+        duration: response.duration || 30, // Default to 30 minutes if not specified
+        reason: response.reason || 'General consultation',
+        notes: response.notes || '',
+        status: response.status || 'scheduled',
+        patientDetails: {
+          age: response.patients?.age || 0,
+          gender: response.patients?.gender || 'Not specified',
+          phone: response.patients?.phone || 'Not provided',
+          email: response.patients?.email || 'Not provided',
+        }
+      };
+      
+      setAppointment(formattedAppointment);
     } catch (error) {
       console.error('Failed to load appointment details:', error);
       Alert.alert('Error', 'Failed to load appointment details');
@@ -139,10 +160,26 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
             text: 'Yes', 
             style: 'destructive',
             onPress: async () => {
-              setIsLoading(true);
-              await appointmentService.updateAppointment(appointmentId, { status: 'cancelled' });
-              loadAppointmentDetails();
-              Alert.alert('Success', 'Appointment cancelled');
+              try {
+                setIsLoading(true);
+                // Use the direct cancellation function instead
+                const success = await directCancelAppointment();
+                
+                if (success) {
+                  // Show success message
+                  Alert.alert(
+                    'Appointment Cancelled',
+                    'The appointment has been successfully cancelled.'
+                  );
+                } else {
+                  Alert.alert('Error', 'Failed to cancel the appointment. Please try again.');
+                }
+              } catch (error) {
+                console.error('Failed to cancel appointment:', error);
+                Alert.alert('Error', 'Failed to cancel the appointment. Please try again.');
+              } finally {
+                setIsLoading(false);
+              }
             }
           }
         ]
@@ -151,6 +188,33 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
       console.error('Failed to cancel appointment:', error);
       Alert.alert('Error', 'Failed to cancel appointment');
       setIsLoading(false);
+    }
+  };
+
+  // Direct cancellation function with explicit API call
+  const directCancelAppointment = async () => {
+    try {
+      console.log(`Directly cancelling appointment ${appointmentId}`);
+      
+      // Use specialized cancelAppointment function for more reliability
+      const response = await appointmentService.cancelAppointment(appointmentId);
+      console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
+      
+      // Update local appointment state
+      if (appointment) {
+        setAppointment({
+          ...appointment,
+          status: 'cancelled'
+        });
+      }
+      
+      // Reload appointment details to ensure everything is in sync
+      await loadAppointmentDetails();
+      
+      return true;
+    } catch (error) {
+      console.error('Direct cancellation failed:', error);
+      return false;
     }
   };
 
@@ -318,7 +382,41 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
         <View style={styles.actionButtons}>
           <TouchableOpacity 
             style={[styles.actionButton, styles.secondaryButton]}
-            onPress={handleCancelAppointment}
+            onPress={async () => {
+              Alert.alert(
+                'Cancel Appointment',
+                'Are you sure you want to cancel this appointment?',
+                [
+                  { text: 'No', style: 'cancel' },
+                  { 
+                    text: 'Yes', 
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        setIsLoading(true);
+                        // Use the direct cancellation function instead
+                        const success = await directCancelAppointment();
+                        
+                        if (success) {
+                          // Show success message
+                          Alert.alert(
+                            'Appointment Cancelled',
+                            'The appointment has been successfully cancelled.'
+                          );
+                        } else {
+                          Alert.alert('Error', 'Failed to cancel the appointment. Please try again.');
+                        }
+                      } catch (error) {
+                        console.error('Failed to cancel appointment:', error);
+                        Alert.alert('Error', 'Failed to cancel the appointment. Please try again.');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }
+                  }
+                ]
+              );
+            }}
           >
             <Ionicons name="close-circle-outline" size={20} color="#dc3545" />
             <Text style={styles.secondaryButtonText}>Cancel Appointment</Text>
@@ -338,9 +436,12 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
       {appointment.status !== 'cancelled' && (
         <TouchableOpacity 
           style={styles.chatButton}
-          onPress={() => navigation.navigate('ChatDetails', { 
-            patientId: appointment.patientId,
-            patientName: appointment.patientName
+          onPress={() => navigation.getParent()?.navigate('Chat', { 
+            screen: 'ChatDetails',
+            params: {
+              patientId: appointment.patientId,
+              patientName: appointment.patientName
+            }
           })}
         >
           <Ionicons name="chatbubble-outline" size={20} color="#ffffff" />

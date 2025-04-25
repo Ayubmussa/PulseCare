@@ -1,4 +1,6 @@
 const supabase = require('../config/supabase');
+const path = require('path');
+const fs = require('fs');
 
 // Get all documents
 const getAllDocuments = async (req, res) => {
@@ -50,15 +52,47 @@ const getDocumentById = async (req, res) => {
 // Upload a new document
 const uploadDocument = async (req, res) => {
   try {
-    const { patient_id, document_url, document_name, document_type, doctor_id, notes } = req.body;
+    const { patient_id, document_name, document_type, doctor_id, notes } = req.body;
     
     // Basic validation
-    if (!patient_id || !document_url || !document_name || !document_type) {
+    if (!patient_id || !document_name || !document_type) {
       return res.status(400).json({ 
-        message: 'Patient ID, document URL, document name, and document type are required' 
+        message: 'Patient ID, document name, and document type are required' 
       });
     }
     
+    let document_url = null;
+    
+    // Check if a file was uploaded
+    if (req.file) {
+      // Generate a filename based on the original name to maintain file extension
+      const fileExtension = path.extname(req.file.originalname);
+      const fileName = `${Date.now()}${fileExtension}`;
+      
+      // Upload file to Supabase Storage - using patient_documents bucket
+      const { data, error } = await supabase.storage
+        .from('patient_documents')
+        .upload(`patients/${patient_id}/${fileName}`, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false
+        });
+      
+      if (error) throw error;
+      
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from('patient_documents')
+        .getPublicUrl(`patients/${patient_id}/${fileName}`);
+      
+      document_url = urlData.publicUrl;
+    } else if (req.body.document_url) {
+      // If no file but URL provided (e.g., from frontend that uploaded directly)
+      document_url = req.body.document_url;
+    } else {
+      return res.status(400).json({ message: 'No document file or URL provided' });
+    }
+    
+    // Save document record in database
     const { data, error } = await supabase
       .from('documents')
       .insert([{ 
@@ -67,7 +101,7 @@ const uploadDocument = async (req, res) => {
         document_name, 
         document_type,
         doctor_id, 
-        notes 
+        notes
       }])
       .select();
     
@@ -75,6 +109,7 @@ const uploadDocument = async (req, res) => {
     
     res.status(201).json(data[0]);
   } catch (error) {
+    console.error('Error uploading document:', error);
     res.status(500).json({ error: error.message });
   }
 };

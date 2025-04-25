@@ -5,7 +5,6 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,7 +19,6 @@ import { useAuth } from '../../context/AuthContext';
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [userType, setUserType] = useState<'patient' | 'doctor' | 'staff'>('patient');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,22 +38,18 @@ const LoginScreen: React.FC = () => {
 
     try {
       setIsLoading(true);
-      await login(email, password, userType);
+      await login(email, password);
       // No need to navigate, AuthContext will handle that
     } catch (error: any) {
       console.error('Login failed:', error);
       
-      // Provide user type specific error messages
+      // Generic error message since we no longer know the user type in advance
       if (error.response && error.response.status === 404) {
-        if (userType === 'patient') {
-          Alert.alert('Login Failed', 'Patient account not found. Please check your email or register as a new patient.');
-        } else if (userType === 'doctor') {
-          Alert.alert('Login Failed', 'Doctor account not found. Please check your email or contact administration.');
-        } else if (userType === 'staff') {
-          Alert.alert('Login Failed', 'Staff account not found. Please check your email or contact administration.');
-        }
+        Alert.alert('Login Failed', 'Account not found. Please check your email or register if you\'re a new patient.');
       } else if (error.response && error.response.status === 401) {
         Alert.alert('Login Failed', 'Incorrect password. Please try again.');
+      } else if (error.message && error.message.includes('user type')) {
+        Alert.alert('Login Failed', error.message);
       } else {
         Alert.alert('Login Failed', 'Unable to log in. Please try again later.');
       }
@@ -65,6 +59,7 @@ const LoginScreen: React.FC = () => {
   };
 
   const navigateToRegister = () => {
+    // Only patients can register themselves
     navigation.navigate('Register');
   };
 
@@ -90,53 +85,6 @@ const LoginScreen: React.FC = () => {
         <View style={styles.formContainer}>
           <Text style={styles.welcomeText}>Welcome Back</Text>
           <Text style={styles.subtitleText}>Sign in to continue</Text>
-
-          <View style={styles.userTypeContainer}>
-            <TouchableOpacity 
-              style={[
-                styles.userTypeButton, 
-                userType === 'patient' && styles.activeUserTypeButton
-              ]}
-              onPress={() => setUserType('patient')}
-            >
-              <Text style={[
-                styles.userTypeText,
-                userType === 'patient' && styles.activeUserTypeText
-              ]}>
-                Patient
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.userTypeButton, 
-                userType === 'doctor' && styles.activeUserTypeButton
-              ]}
-              onPress={() => setUserType('doctor')}
-            >
-              <Text style={[
-                styles.userTypeText,
-                userType === 'doctor' && styles.activeUserTypeText
-              ]}>
-                Doctor
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.userTypeButton, 
-                userType === 'staff' && styles.activeUserTypeButton
-              ]}
-              onPress={() => setUserType('staff')}
-            >
-              <Text style={[
-                styles.userTypeText,
-                userType === 'staff' && styles.activeUserTypeText
-              ]}>
-                Staff
-              </Text>
-            </TouchableOpacity>
-          </View>
 
           <View style={styles.inputContainer}>
             <Ionicons name="mail-outline" size={20} color="#6c757d" style={styles.inputIcon} />
@@ -200,6 +148,12 @@ const LoginScreen: React.FC = () => {
               <Text style={styles.registerLink}> Register</Text>
             </TouchableOpacity>
           </View>
+          
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.infoText}>
+              Note: Registration is only available for patients. Doctor and staff accounts are managed by clinic administrators.
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -243,35 +197,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     marginBottom: 25,
-  },
-  userTypeContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: '#e9ecef',
-    borderRadius: 10,
-    padding: 4,
-  },
-  userTypeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeUserTypeButton: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  userTypeText: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
-  activeUserTypeText: {
-    color: '#007bff',
-    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -320,6 +245,7 @@ const styles = StyleSheet.create({
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    marginBottom: 15,
   },
   registerText: {
     color: '#6c757d',
@@ -329,6 +255,18 @@ const styles = StyleSheet.create({
     color: '#007bff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  infoTextContainer: {
+    marginTop: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#e9ecef',
+    borderRadius: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#6c757d',
+    textAlign: 'center',
   },
 });
 

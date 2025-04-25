@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,26 +7,126 @@ import {
   Image, 
   TouchableOpacity,
   Modal,
-  TextInput 
+  TextInput,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NavigationProp } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
+import { staffService } from '../../services/api';
+
+interface StaffInfo {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  phoneNumber: string;
+  employeeId: string;
+  department: string;
+  joinDate: string;
+  workHours: string;
+  supervisor: string;
+  image?: string;
+  status?: string;
+}
 
 const StaffProfileScreen = () => {
+  const { user, logout } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   const [editField, setEditField] = useState('');
   const [editValue, setEditValue] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigation = useNavigation<NavigationProp<any>>();
+  
 
-  const [staffInfo, setStaffInfo] = useState({
-    name: 'Sarah Johnson',
-    role: 'Clinic Administrator',
-    email: 'sarah.johnson@pulsecare.com',
-    phoneNumber: '+1 (555) 123-4567',
-    employeeId: 'STAFF-1234',
-    department: 'Administration',
-    joinDate: 'Jan 15, 2023',
-    workHours: 'Mon-Fri, 9:00 AM - 5:00 PM',
-    supervisor: 'Dr. James Wilson, Medical Director',
+  const [staffInfo, setStaffInfo] = useState<StaffInfo>({
+    id: '',
+    name: '',
+    role: '',
+    email: '',
+    phoneNumber: '',
+    employeeId: '',
+    department: '',
+    joinDate: '',
+    workHours: '',
+    supervisor: '',
+    status: 'active'
   });
+
+  useEffect(() => {
+    fetchStaffProfile();
+  }, []);
+
+  const fetchStaffProfile = async () => {
+    if (!user || !user.id) {
+      setError('User information not available');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const profileData = await staffService.getStaffById(user.id);
+      
+      // Transform API data to the format needed by the UI
+      setStaffInfo({
+        id: profileData.id,
+        name: profileData.name || 'N/A',
+        role: profileData.role || 'Staff Member',
+        email: profileData.email || 'N/A',
+        phoneNumber: profileData.phoneNumber || profileData.phone || 'N/A',
+        employeeId: profileData.employeeId || `STAFF-${profileData.id.substring(0, 4)}`,
+        department: profileData.department || 'General',
+        joinDate: formatDate(profileData.joinDate || profileData.createdAt),
+        workHours: profileData.workHours || 'Mon-Fri, 9:00 AM - 5:00 PM',
+        supervisor: profileData.supervisor || 'N/A',
+        image: profileData.image,
+        status: profileData.status || 'active'
+      });
+    } catch (err) {
+      console.error('Failed to fetch staff profile:', err);
+      setError('Failed to load profile data. Please try again.');
+      
+      // Use fallback data for development or demo purposes
+      if (user) {
+        setStaffInfo({
+          id: user.id,
+          name: user.name || 'Staff Member',
+          role: user.role || 'Clinic Staff',
+          email: user.email || 'staff@pulsecare.com',
+          phoneNumber: '+1 (555) 123-4567',
+          employeeId: `STAFF-${user.id.substring(0, 4)}`,
+          department: 'Administration',
+          joinDate: 'Jan 15, 2023',
+          workHours: 'Mon-Fri, 9:00 AM - 5:00 PM',
+          supervisor: 'Dr. James Wilson, Medical Director',
+          status: 'active'
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
 
   const handleEditField = (field: string, value: string) => {
     setEditField(field);
@@ -34,32 +134,82 @@ const StaffProfileScreen = () => {
     setModalVisible(true);
   };
 
-  const handleSaveEdit = () => {
-    setStaffInfo({
-      ...staffInfo,
-      [editField]: editValue
-    });
-    setModalVisible(false);
+  const handleSaveEdit = async () => {
+    if (!user || !user.id) {
+      Alert.alert('Error', 'User information not available');
+      setModalVisible(false);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      // Update the field in the backend
+      const updateData = { [editField]: editValue };
+      await staffService.updateStaff(user.id, updateData);
+      
+      // Update local state
+      setStaffInfo({
+        ...staffInfo,
+        [editField]: editValue
+      });
+      
+      setModalVisible(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogout = () => {
-    // Implement logout functionality
-    console.log('Logging out...');
+    logout();
+    navigation.navigate('Login');
   };
+
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
+      {saving && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      )}
+      
       <View style={styles.header}>
         <Image 
-          source={{ uri: 'https://via.placeholder.com/150' }} 
-          style={styles.profileImage} 
+          source={staffInfo.image ? { uri: staffInfo.image } : require('../../../assets/default-avatar.png')} 
+          style={styles.profileImage}
+          onError={(e) => console.log('Image loading error:', e.nativeEvent.error)}
         />
         <Text style={styles.name}>{staffInfo.name}</Text>
         <Text style={styles.role}>{staffInfo.role}</Text>
         
-        <View style={styles.statusBadge}>
-          <View style={styles.statusIndicator} />
-          <Text style={styles.statusText}>Active</Text>
+        <View style={[
+          styles.statusBadge,
+          { backgroundColor: staffInfo.status === 'active' ? '#e6f7e6' : '#f8d7da' }
+        ]}>
+          <View style={[
+            styles.statusIndicator,
+            { backgroundColor: staffInfo.status === 'active' ? '#28a745' : '#dc3545' }
+          ]} />
+          <Text style={[
+            styles.statusText,
+            { color: staffInfo.status === 'active' ? '#28a745' : '#dc3545' }
+          ]}>
+            {staffInfo.status === 'active' ? 'Active' : 'Inactive'}
+          </Text>
         </View>
       </View>
       
@@ -159,6 +309,14 @@ const StaffProfileScreen = () => {
         </View>
       </View>
       
+      <TouchableOpacity 
+        style={styles.settingsButton}
+        onPress={() => Alert.alert('Coming Soon', 'Account settings will be available in the next update.')}
+      >
+        <Ionicons name="settings-outline" size={24} color="#007bff" />
+        <Text style={styles.settingsText}>Account Settings</Text>
+      </TouchableOpacity>
+      
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={24} color="#fff" />
         <Text style={styles.logoutText}>Logout</Text>
@@ -184,12 +342,15 @@ const StaffProfileScreen = () => {
               value={editValue}
               onChangeText={setEditValue}
               autoFocus
+              keyboardType={editField === 'email' ? 'email-address' : 
+                            editField === 'phoneNumber' ? 'phone-pad' : 'default'}
             />
             
             <View style={styles.modalButtons}>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelButton]} 
                 onPress={() => setModalVisible(false)}
+                disabled={saving}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -197,8 +358,13 @@ const StaffProfileScreen = () => {
               <TouchableOpacity 
                 style={[styles.modalButton, styles.saveButton]} 
                 onPress={handleSaveEdit}
+                disabled={saving}
               >
-                <Text style={styles.saveButtonText}>Save</Text>
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -326,6 +492,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 10,
   },
+  settingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f9ff',
+    margin: 20,
+    padding: 15,
+    borderRadius: 10,
+  },
+  settingsText: {
+    color: '#007bff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 10,
+  },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -377,6 +558,28 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 1,
   },
 });
 

@@ -13,12 +13,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { doctorService } from '../../services/api';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { doctorService, staffService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
-// Define types for route params
-type DoctorDetailsParams = {
-  doctorId: string;
+// Define types for route params and navigation
+type RootStackParamList = {
+  DoctorSchedule: { doctorId: string; doctorName: string };
+  DoctorPatients: { doctorId: string; doctorName: string };
+  StaffDoctorDetails: { doctorId: string };
 };
+
+type StaffDoctorDetailsRouteProp = RouteProp<RootStackParamList, 'StaffDoctorDetails'>;
+type StaffDoctorDetailsNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Define Doctor interface
 interface Doctor {
@@ -46,10 +53,13 @@ interface Doctor {
 }
 
 const StaffDoctorDetailsScreen = () => {
-  const route = useRoute<RouteProp<Record<string, DoctorDetailsParams>, string>>();
-  const navigation = useNavigation();
+  const route = useRoute<StaffDoctorDetailsRouteProp>();
+  const navigation = useNavigation<StaffDoctorDetailsNavigationProp>();
+  const { user } = useAuth();
   const { doctorId } = route.params;
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editField, setEditField] = useState('');
   const [editValue, setEditValue] = useState('');
@@ -72,9 +82,18 @@ const StaffDoctorDetailsScreen = () => {
 
   const fetchDoctorDetails = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Get doctor data from API
-      const doctorData = await doctorService.getDoctorById(doctorId);
+      // Get doctor data using staff API for proper permissions
+      let doctorData;
+      try {
+        // Try to use staff-specific endpoint first
+        doctorData = await staffService.getDoctorById(doctorId);
+      } catch (staffError) {
+        console.warn("Staff doctor endpoint failed, falling back to general endpoint:", staffError);
+        // Fallback to general endpoint if staff endpoint fails
+        doctorData = await doctorService.getDoctorById(doctorId);
+      }
       
       // Transform API data into UI model if needed
       const transformedData = {
@@ -97,6 +116,7 @@ const StaffDoctorDetailsScreen = () => {
       setDoctor(transformedData);
     } catch (error) {
       console.error('Error fetching doctor details:', error);
+      setError('Failed to load doctor information. Please try again later.');
       Alert.alert('Error', 'Failed to load doctor information. Please try again later.');
     } finally {
       setLoading(false);
@@ -110,13 +130,19 @@ const StaffDoctorDetailsScreen = () => {
   };
 
   const handleSaveEdit = async () => {
+    if (!doctor.id) {
+      Alert.alert('Error', 'Doctor ID is missing');
+      return;
+    }
+
     try {
+      setSaving(true);
       // Create update object with just the field being edited
       const updateData = {
         [editField]: editValue
       };
       
-      // Update doctor in API
+      // Update doctor directly using doctorService since staffService.updateDoctor doesn't exist
       await doctorService.updateDoctor(doctor.id, updateData);
       
       // Update local state
@@ -130,15 +156,33 @@ const StaffDoctorDetailsScreen = () => {
     } catch (error) {
       console.error('Failed to update doctor information:', error);
       Alert.alert('Error', 'Failed to update. Please try again later.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleStatusChange = async (status: string) => {
+    if (!doctor.id || !user?.id) {
+      Alert.alert('Error', 'Required information is missing');
+      return;
+    }
+
     try {
-      // Update status in API
-      await doctorService.updateDoctor(doctor.id, { 
-        status: status as 'active' | 'inactive' 
-      });
+      setSaving(true);
+      // Update status using staff API for proper permissions
+      try {
+        await staffService.updateDoctorStatus(
+          doctor.id, 
+          status as 'active' | 'inactive',
+          user.id,
+          `Status changed to ${status} by staff`
+        );
+      } catch (staffError) {
+        console.warn("Staff update status endpoint failed, falling back to general endpoint:", staffError);
+        await doctorService.updateDoctor(doctor.id, { 
+          status: status as 'active' | 'inactive' 
+        });
+      }
       
       // Update local state
       setDoctor({
@@ -154,29 +198,54 @@ const StaffDoctorDetailsScreen = () => {
     } catch (error) {
       console.error('Failed to update doctor status:', error);
       Alert.alert('Error', 'Failed to update status. Please try again later.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleViewSchedule = () => {
-    // Navigate to doctor schedule screen or show detailed schedule
-    console.log('View detailed schedule');
+    navigation.navigate('DoctorSchedule', { 
+      doctorId: doctor.id,
+      doctorName: doctor.name 
+    });
   };
   
   const handleViewPatients = () => {
-    // Navigate to doctor's patients list
-    console.log('View doctor patients');
+    navigation.navigate('DoctorPatients', { 
+      doctorId: doctor.id,
+      doctorName: doctor.name 
+    });
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Loading doctor information...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={60} color="#dc3545" />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchDoctorDetails}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container}>
+      {saving && (
+        <View style={styles.savingOverlay}>
+          <ActivityIndicator size="large" color="#ffffff" />
+        </View>
+      )}
+      
       <View style={styles.header}>
         <View style={styles.profileSection}>
           <Image 
@@ -445,6 +514,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#dc3545',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#007bff',
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  savingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   header: {
     backgroundColor: '#fff',

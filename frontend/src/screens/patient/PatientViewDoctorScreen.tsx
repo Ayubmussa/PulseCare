@@ -70,17 +70,31 @@ const PatientViewDoctorScreen = () => {
     fetchDoctorDetails();
   }, [route.params?.doctorId]);
 
-  const handleBookAppointment = () => {
+  const navigateToBookAppointment = () => {
     if (doctor) {
-      navigation.navigate('BookAppointment', { doctorId: doctor.id });
+      // Handle different navigation paths based on where we came from
+      const currentRoute = navigation.getState().routes[navigation.getState().index];
+      const parentScreen = currentRoute?.name;
+      
+      if (parentScreen === 'ViewDoctor' && navigation.canGoBack()) {
+        // If we're in the Doctors stack
+        navigation.navigate('BookAppointment', { doctorId: doctor.id });
+      } else {
+        // Coming from Home or another tab - use nested navigation
+        navigation.navigate('BookAppointment', { doctorId: doctor.id });
+      }
     }
   };
 
   const handleStartChat = () => {
     if (doctor) {
-      navigation.navigate('ChatDetails', { 
-        doctorId: doctor.id,
-        doctorName: doctor.name
+      // Using a more general navigation approach that works with nested navigators
+      navigation.getParent()?.navigate('Chat', {
+        screen: 'ChatDetails',
+        params: { 
+          doctorId: doctor.id,
+          doctorName: doctor.name
+        }
       });
     }
   };
@@ -154,7 +168,7 @@ const PatientViewDoctorScreen = () => {
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        <TouchableOpacity style={styles.appointmentButton} onPress={handleBookAppointment}>
+        <TouchableOpacity style={styles.appointmentButton} onPress={navigateToBookAppointment}>
           <Ionicons name="calendar-outline" size={20} color="#fff" />
           <Text style={styles.buttonText}>Book Appointment</Text>
         </TouchableOpacity>

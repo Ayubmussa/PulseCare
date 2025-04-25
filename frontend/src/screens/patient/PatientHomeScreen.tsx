@@ -119,7 +119,31 @@ const PatientHomeScreen: React.FC = () => {
 
   // Navigate to quick access service
   const navigateToService = (route: string) => {
-    navigation.navigate(route);
+    // Map route names to proper navigation paths
+    switch (route) {
+      case 'Appointments':
+        navigation.navigate('Appointments');
+        break;
+      case 'Doctors':
+        navigation.navigate('Doctors');
+        break;
+      case 'MedicalRecords':
+        navigation.navigate('Records');
+        break;
+      case 'Chat':
+        navigation.navigate('Chat');
+        break;
+      default:
+        navigation.navigate(route);
+    }
+  };
+
+  // Navigate to book appointment
+  const navigateToBookAppointment = () => {
+    // Navigate to the book appointment screen in the Appointments stack
+    navigation.navigate('Appointments', { 
+      screen: 'BookAppointment' 
+    });
   };
 
   // Format date for display
@@ -202,7 +226,7 @@ const PatientHomeScreen: React.FC = () => {
             <Text style={styles.emptyStateText}>No upcoming appointments</Text>
             <TouchableOpacity 
               style={styles.bookButton}
-              onPress={() => navigation.navigate('BookAppointment')}
+              onPress={navigateToBookAppointment}
             >
               <Text style={styles.bookButtonText}>Book an Appointment</Text>
             </TouchableOpacity>

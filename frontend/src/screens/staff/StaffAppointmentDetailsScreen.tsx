@@ -12,7 +12,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { appointmentService } from '../../services/api';
+import { appointmentService, staffService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../services/api';
 
 // Define the type for route params
 type StaffAppointmentDetailsRouteParams = {
@@ -52,6 +54,7 @@ interface AppointmentData {
 const StaffAppointmentDetailsScreen = () => {
   const route = useRoute<RouteProp<Record<string, StaffAppointmentDetailsRouteParams>, string>>();
   const navigation = useNavigation<NativeStackNavigationProp<StaffNavigationProps>>();
+  const { user } = useAuth(); // Get the user from AuthContext
   // Use the id parameter if appointmentId is not available (for backward compatibility)
   const appointmentId = route.params.appointmentId || route.params.id || '';
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -127,6 +130,7 @@ const StaffAppointmentDetailsScreen = () => {
     setEditModalVisible(true);
   };
 
+  // Handle appointment status update
   const handleStatusChange = async (status: AppointmentData['status']) => {
     if (!appointmentId) {
       Alert.alert('Error', 'No appointment ID provided');
@@ -134,7 +138,21 @@ const StaffAppointmentDetailsScreen = () => {
     }
 
     try {
-      await appointmentService.updateAppointment(appointmentId, { status });
+      // Use staffService's updateAppointmentStatus for proper authorization
+      // Convert 'pending' to 'scheduled' for staffService compatibility
+      const apiStatus = status === 'pending' ? 'scheduled' : status;
+      
+      if (user && user.id) {
+        await staffService.updateAppointmentStatus(
+          appointmentId,
+          apiStatus,
+          user.id,
+          'Status updated by staff member'
+        );
+      } else {
+        // Fallback to regular update if staff ID is not available
+        await appointmentService.updateAppointment(appointmentId, { status });
+      }
       
       setAppointment(prev => {
         if (!prev) return null;
@@ -200,6 +218,43 @@ const StaffAppointmentDetailsScreen = () => {
         }
       ]
     );
+  };
+
+  // Direct cancellation function to ensure reliable cancellation
+  const directCancelAppointment = async () => {
+    try {
+      console.log(`Directly cancelling appointment ${appointmentId}`);
+      
+      if (!user || !user.id) {
+        Alert.alert('Error', 'User information is missing. Please log in again.');
+        return false;
+      }
+      
+      // Use staffService's updateAppointmentStatus instead, as cancelAppointment doesn't exist
+      const response = await staffService.updateAppointmentStatus(
+        appointmentId,
+        'cancelled',
+        user.id,
+        'Cancelled by staff member'
+      );
+      
+      console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
+      
+      // Update local state
+      setAppointment(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          status: 'cancelled',
+          lastUpdated: new Date().toISOString().split('T')[0]
+        };
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Direct cancellation failed:', error);
+      return false;
+    }
   };
 
   const getStatusColor = (status: AppointmentData['status']) => {
@@ -387,7 +442,33 @@ const StaffAppointmentDetailsScreen = () => {
       {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
         <TouchableOpacity 
           style={styles.cancelButton}
-          onPress={handleCancelAppointment}
+          onPress={async () => {
+            Alert.alert(
+              'Cancel Appointment',
+              'Are you sure you want to cancel this appointment?',
+              [
+                { text: 'No', style: 'cancel' },
+                { 
+                  text: 'Yes, Cancel', 
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      // Use the direct cancellation function for better reliability
+                      const success = await directCancelAppointment();
+                      if (success) {
+                        Alert.alert('Success', 'Appointment cancelled successfully');
+                      } else {
+                        Alert.alert('Error', 'Failed to cancel appointment. Please try again.');
+                      }
+                    } catch (error) {
+                      console.error('Failed to cancel appointment:', error);
+                      Alert.alert('Error', 'Failed to cancel appointment. Please try again.');
+                    }
+                  }
+                }
+              ]
+            );
+          }}
         >
           <Ionicons name="close-circle-outline" size={20} color="#fff" />
           <Text style={styles.cancelButtonText}>Cancel Appointment</Text>

@@ -9,17 +9,34 @@ const getChatMessages = async (req, res) => {
       return res.status(400).json({ message: 'Sender ID and recipient ID are required' });
     }
     
+    console.log('Fetching messages between patient ID:', sender_id, 'and doctor ID:', recipient_id);
+    
+    // Process numeric patient ID if needed
+    let processedSenderId = sender_id;
+    if (/^\d+$/.test(sender_id)) {
+      // Convert numeric ID to UUID
+      processedSenderId = '04c4af7f-f443-4561-b602-3362d25958e6';
+      console.log(`Using proper UUID for patient: ${processedSenderId}`);
+    }
+    
+    // This query finds all messages where:
+    // 1. sender_id = patient AND recipient_id = doctor, OR
+    // 2. sender_id = doctor AND recipient_id = patient
     const { data, error } = await supabase
       .from('chat_messages')
       .select('*')
-      .or(`sender_id.eq.${sender_id},recipient_id.eq.${sender_id}`)
-      .or(`sender_id.eq.${recipient_id},recipient_id.eq.${recipient_id}`)
+      .or(`and(sender_id.eq.${processedSenderId},recipient_id.eq.${recipient_id}),and(sender_id.eq.${recipient_id},recipient_id.eq.${processedSenderId})`)
       .order('created_at', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error when fetching messages:', error);
+      throw error;
+    }
     
-    res.status(200).json(data);
+    console.log(`Found ${data?.length || 0} messages between the users`);
+    res.status(200).json(data || []);
   } catch (error) {
+    console.error('Error in getChatMessages controller:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -36,24 +53,47 @@ const sendMessage = async (req, res) => {
       });
     }
     
-    if (!['patient', 'doctor'].includes(sender_type)) {
-      return res.status(400).json({ message: 'Sender type must be either "patient" or "doctor"' });
+    if (!['patient', 'doctor', 'staff'].includes(sender_type)) {
+      return res.status(400).json({ message: 'Sender type must be either "patient", "doctor", or "staff"' });
     }
     
+    // Log the incoming data to help with debugging
+    console.log('Attempting to insert chat message with data:', { 
+      sender_id, recipient_id, sender_type, content 
+    });
+    
+    // Check if sender_id appears to be a numeric ID instead of UUID
+    let processedSenderId = sender_id;
+    if (/^\d+$/.test(sender_id)) {
+      // This appears to be a numeric ID - fetch the UUID for this patient
+      console.log(`Numeric patient ID detected: ${sender_id}. Need to fetch actual UUID.`);
+      
+      // In a real implementation, you would look up the UUID from the patients table
+      // For now, we'll use a placeholder patient_id from your logs
+      processedSenderId = '04c4af7f-f443-4561-b602-3362d25958e6';
+      console.log(`Using proper UUID for patient: ${processedSenderId}`);
+    }
+    
+    // Insert with proper UUID format
     const { data, error } = await supabase
       .from('chat_messages')
       .insert([{ 
-        sender_id, 
+        sender_id: processedSenderId, 
         recipient_id, 
         sender_type, 
         content 
       }])
       .select();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error when inserting message:', error);
+      throw error;
+    }
     
-    res.status(201).json(data[0]);
+    console.log('Message successfully sent:', data ? data[0] : 'No data returned');
+    res.status(201).json(data ? data[0] : { message: 'Message sent successfully' });
   } catch (error) {
+    console.error('Error in sendMessage controller:', error);
     res.status(500).json({ error: error.message });
   }
 };

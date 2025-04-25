@@ -14,6 +14,7 @@ import PatientViewDoctorScreen from '../screens/patient/PatientViewDoctorScreen'
 import PatientBookAppointmentScreen from '../screens/patient/PatientBookAppointmentScreen';
 import PatientDocumentsScreen from '../screens/patient/PatientDocumentsScreen';
 import PatientDoctorsScreen from '../screens/patient/PatientDoctorsScreen';
+import PatientAppointmentDetailsScreen from '../screens/patient/PatientAppointmentDetailsScreen';
 
 // Create stacks for complex navigation flows
 const HomeStack = createNativeStackNavigator();
@@ -41,6 +42,11 @@ const HomeStackNavigator = () => {
         component={PatientBookAppointmentScreen}
         options={{ title: 'Book Appointment' }}
       />
+      <HomeStack.Screen
+        name="AppointmentDetails"
+        component={PatientAppointmentDetailsScreen}
+        options={{ title: 'Appointment Details' }}
+      />
     </HomeStack.Navigator>
   );
 };
@@ -53,6 +59,11 @@ const AppointmentStackNavigator = () => {
         name="PatientAppointments"
         component={PatientAppointmentsScreen}
         options={{ headerShown: false }}
+      />
+      <AppointmentStack.Screen
+        name="AppointmentDetails"
+        component={PatientAppointmentDetailsScreen}
+        options={{ title: 'Appointment Details' }}
       />
       <AppointmentStack.Screen
         name="BookAppointment"

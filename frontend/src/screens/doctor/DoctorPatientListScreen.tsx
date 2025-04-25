@@ -94,12 +94,15 @@ const DoctorPatientListScreen: React.FC = () => {
     
     if (params && params.action === 'newChat') {
       // Navigate to chat details to start a new chat with this patient
-      navigation.navigate('ChatDetails', {
-        participantId: patient.id,
-        participantName: patient.name,
-        participantType: 'patient',
-        participantImage: patient.image,
-        isNewChat: true
+      navigation.getParent()?.navigate('Chat', {
+        screen: 'ChatDetails',
+        params: {
+          participantId: patient.id,
+          participantName: patient.name,
+          participantType: 'patient',
+          participantImage: patient.image,
+          isNewChat: true
+        }
       });
     } else {
       // Regular navigation to patient details

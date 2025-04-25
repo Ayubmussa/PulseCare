@@ -18,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const ForgotPasswordScreen: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [userType, setUserType] = useState<'patient' | 'doctor' | 'staff'>('patient');
   const [isLoading, setIsLoading] = useState(false);
   const [isEmailSent, setIsEmailSent] = useState(false);
@@ -32,10 +33,20 @@ const ForgotPasswordScreen: React.FC = () => {
       return;
     }
 
+    if (!newPassword.trim()) {
+      Alert.alert('Error', 'Please enter a new password');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      // Assuming there will be a resetPassword function in the AuthContext
-      await resetPassword(email, userType);
+      // Pass the new password to resetPassword function
+      await resetPassword(email, userType, newPassword);
       setIsEmailSent(true);
     } catch (error: any) {
       console.error('Password reset failed:', error);
@@ -79,9 +90,9 @@ const ForgotPasswordScreen: React.FC = () => {
         <View style={styles.formContainer}>
           {!isEmailSent ? (
             <>
-              <Text style={styles.welcomeText}>Forgot Password</Text>
+              <Text style={styles.welcomeText}>Reset Password</Text>
               <Text style={styles.subtitleText}>
-                Enter your email and we'll send you instructions to reset your password
+                Enter your email and new password to reset your account
               </Text>
 
               <View style={styles.userTypeContainer}>
@@ -144,6 +155,19 @@ const ForgotPasswordScreen: React.FC = () => {
                 />
               </View>
 
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6c757d" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="New Password"
+                  placeholderTextColor="#999"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+
               <TouchableOpacity 
                 style={styles.resetButton}
                 onPress={handleResetPassword}
@@ -152,16 +176,16 @@ const ForgotPasswordScreen: React.FC = () => {
                 {isLoading ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.resetButtonText}>Send Reset Instructions</Text>
+                  <Text style={styles.resetButtonText}>Reset Password</Text>
                 )}
               </TouchableOpacity>
             </>
           ) : (
             <View style={styles.successContainer}>
               <Ionicons name="checkmark-circle" size={80} color="#28a745" style={styles.successIcon} />
-              <Text style={styles.successTitle}>Email Sent!</Text>
+              <Text style={styles.successTitle}>Password Reset Successful!</Text>
               <Text style={styles.successMessage}>
-                We have sent password reset instructions to your email. Please check your inbox.
+                Your password has been reset successfully. You can now log in with your new password.
               </Text>
               <TouchableOpacity 
                 style={styles.returnButton}

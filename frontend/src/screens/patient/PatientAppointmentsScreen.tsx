@@ -11,10 +11,11 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentService } from '../../services/api';
+import api from '../../services/api';
 
 // Appointment type definition
 interface Appointment {
@@ -24,7 +25,7 @@ interface Appointment {
   specialty: string;
   date: string;
   time: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'canceled' | 'confirmed' | 'checked-in' | 'no-show';
   notes?: string;
   location?: string;
 }
@@ -39,11 +40,22 @@ const PatientAppointmentsScreen: React.FC = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const route = useRoute<any>();
   const { user } = useAuth();
+  
+  // Get initialFilter from route params if available
+  const initialFilter = route.params?.initialFilter;
 
   useEffect(() => {
     loadAppointments();
   }, []);
+
+  useEffect(() => {
+    // Set the filter from route params if it exists
+    if (initialFilter && ['upcoming', 'past', 'cancelled'].includes(initialFilter)) {
+      setActiveFilter(initialFilter);
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     filterAppointments(activeFilter);
@@ -53,11 +65,30 @@ const PatientAppointmentsScreen: React.FC = () => {
     try {
       setIsLoading(true);
       if (user?.id) {
-        // Using getAllAppointments and filtering for current patient
-        const allAppointments = await appointmentService.getAllAppointments();
-        // Filter appointments for the current user
-        const patientAppointments = allAppointments.filter((apt: any) => apt.patientId === user.id);
-        setAppointments(patientAppointments);
+        // Using the appointmentService to get the patient's appointments
+        const patientAppointmentsData = await appointmentService.getPatientAppointments(user.id);
+        
+        // Map the backend response to our frontend Appointment interface
+        const formattedAppointments = patientAppointmentsData.map((apt: any) => {
+          // Extract date and time from date_time field (format: "YYYY-MM-DDThh:mm")
+          const dateTimeObj = new Date(apt.date_time);
+          const date = dateTimeObj.toISOString().split('T')[0];
+          const time = dateTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
+          return {
+            id: apt.id,
+            doctorId: apt.doctor_id,
+            doctorName: apt.doctors?.name || 'Unknown Doctor',
+            specialty: apt.doctors?.specialty || 'General',
+            date: date,
+            time: time,
+            status: apt.status || 'scheduled',
+            notes: apt.notes,
+            location: apt.location || 'PulseCare Clinic'
+          };
+        });
+        
+        setAppointments(formattedAppointments);
       }
     } catch (error) {
       console.error('Failed to load appointments:', error);
@@ -74,39 +105,182 @@ const PatientAppointmentsScreen: React.FC = () => {
   };
 
   const filterAppointments = (filterType: string) => {
-    const today = new Date();
+    const now = new Date();
+    
+    console.log('Filtering appointments:', filterType);
+    console.log('Total appointments:', appointments.length);
+    console.log('Current date:', now.toISOString());
+    
+    // Debug: Log all appointments before filtering
+    if (appointments.length > 0) {
+      console.log('First appointment:', appointments[0]);
+      
+      // Debug: Log all appointment statuses and dates
+      console.log('All appointment statuses:', 
+        appointments.map(apt => `${apt.id}: ${apt.status} (${apt.date} ${apt.time})`).join(', '));
+    }
+    
+    let filtered: Appointment[] = [];
     
     switch (filterType) {
       case 'upcoming':
-        setFilteredAppointments(
-          appointments.filter(
-            (apt) => 
-              apt.status === 'scheduled' && 
-              new Date(apt.date) >= today
-          ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        // Show appointments that are scheduled and have not passed yet
+        filtered = appointments.filter(
+          (apt) => {
+            try {
+              // Parse date more reliably
+              const dateParts = apt.date.split('-');
+              const timeParts = apt.time.replace(/\s*[AP]M\s*$/i, '').split(':');
+              
+              if (dateParts.length !== 3) {
+                console.log('Invalid date format:', apt.date);
+                return false;
+              }
+              
+              const year = parseInt(dateParts[0]);
+              const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed in JavaScript
+              const day = parseInt(dateParts[2]);
+              
+              // Create appointment date with at least hours and minutes
+              const appointmentDate = new Date(year, month, day);
+              if (timeParts.length >= 2) {
+                let hours = parseInt(timeParts[0]);
+                // Handle 12-hour format
+                if (apt.time.toLowerCase().includes('pm') && hours < 12) {
+                  hours += 12;
+                } else if (apt.time.toLowerCase().includes('am') && hours === 12) {
+                  hours = 0;
+                }
+                appointmentDate.setHours(hours);
+                appointmentDate.setMinutes(parseInt(timeParts[1]));
+              }
+              
+              // For debugging
+              console.log(`Appointment: ${apt.doctorName}, Parsed Date: ${appointmentDate.toISOString()}, Status: ${apt.status}`);
+              console.log(`Is upcoming: ${apt.status === 'scheduled' && appointmentDate > now}, Comparison: ${appointmentDate.getTime()} > ${now.getTime()}`);
+              
+              // Consider confirmed appointments as scheduled as well
+              const isScheduledOrConfirmed = apt.status === 'scheduled' || apt.status === 'confirmed';
+              const isUpcoming = appointmentDate > now;
+              return isScheduledOrConfirmed && isUpcoming;
+            } catch (error) {
+              console.error('Error parsing date:', error, apt.date, apt.time);
+              return false;
+            }
+          }
         );
+        
+        filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         break;
         
       case 'past':
-        setFilteredAppointments(
-          appointments.filter(
-            (apt) => 
-              (apt.status === 'completed' || new Date(apt.date) < today) &&
-              apt.status !== 'cancelled'
-          ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        // Show completed appointments OR scheduled appointments that have passed
+        filtered = appointments.filter(
+          (apt) => {
+            try {
+              // Parse date more reliably
+              const dateParts = apt.date.split('-');
+              const timeParts = apt.time.replace(/\s*[AP]M\s*$/i, '').split(':');
+              
+              if (dateParts.length !== 3) {
+                console.log('Invalid date format:', apt.date);
+                return false;
+              }
+              
+              const year = parseInt(dateParts[0]);
+              const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed in JavaScript
+              const day = parseInt(dateParts[2]);
+              
+              // Create appointment date
+              const appointmentDate = new Date(year, month, day);
+              if (timeParts.length >= 2) {
+                let hours = parseInt(timeParts[0]);
+                // Handle 12-hour format
+                if (apt.time.toLowerCase().includes('pm') && hours < 12) {
+                  hours += 12;
+                } else if (apt.time.toLowerCase().includes('am') && hours === 12) {
+                  hours = 0;
+                }
+                appointmentDate.setHours(hours);
+                appointmentDate.setMinutes(parseInt(timeParts[1]));
+              }
+              
+              // For debugging
+              console.log(`Past check - Appointment: ${apt.doctorName}, Date: ${appointmentDate.toISOString()}, Status: ${apt.status}`);
+              console.log(`Is past: ${apt.status === 'completed' || (apt.status === 'scheduled' && appointmentDate <= now)}`);
+              
+              // Add check for no-show and checked-in status
+              const isCompleted = apt.status === 'completed' || apt.status === 'checked-in' || apt.status === 'no-show';
+              const isScheduledButPassed = apt.status === 'scheduled' && appointmentDate <= now;
+              
+              // Make sure we don't include any kind of cancelled appointments
+              const isCancelled = typeof apt.status === 'string' && apt.status.toLowerCase().includes('cancel');
+              
+              return (isCompleted || isScheduledButPassed) && !isCancelled;
+            } catch (error) {
+              console.error('Error parsing date:', error, apt.date, apt.time);
+              return false;
+            }
+          }
         );
+        
+        filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         break;
         
       case 'cancelled':
-        setFilteredAppointments(
-          appointments.filter(
-            (apt) => apt.status === 'cancelled'
-          ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        );
+        // Show only cancelled appointments - check for both spellings and any spelling variations
+        console.log('Looking for cancelled appointments...');
+        
+        filtered = appointments.filter(apt => {
+          // Check status in a more flexible way - any value containing "cancel" in any case
+          const isCancelled = typeof apt.status === 'string' && apt.status.toLowerCase().includes('cancel');
+          console.log(`Appointment ${apt.id} status: "${apt.status}", isCancelled: ${isCancelled}`);
+          return isCancelled;
+        });
+        
+        console.log('Found cancelled appointments:', filtered.length);
+        filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         break;
         
       default:
-        setFilteredAppointments(appointments);
+        filtered = appointments;
+    }
+    
+    console.log(`Filtered ${filterType} appointments:`, filtered.length);
+    setFilteredAppointments(filtered);
+  };
+
+  const cancelAppointment = async (appointmentId: string) => {
+    try {
+      console.log(`Directly cancelling appointment ${appointmentId}`);
+      
+      // Use the new specialized cancelAppointment function
+      const response = await appointmentService.cancelAppointment(appointmentId);
+      console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
+      
+      // Update local state
+      setAppointments(prevAppointments => 
+        prevAppointments.map(apt => 
+          apt.id === appointmentId 
+            ? { ...apt, status: 'cancelled' } 
+            : apt
+        )
+      );
+      
+      // Force switch to cancelled tab
+      setActiveFilter('cancelled');
+      
+      // Reload all appointments to ensure everything is in sync
+      await loadAppointments();
+      
+      return true;
+    } catch (error) {
+      console.error('Direct cancellation failed:', error);
+      Alert.alert(
+        'Cancellation Error',
+        'Failed to update appointment status in the database. Please try again.'
+      );
+      return false;
     }
   };
 
@@ -121,13 +295,35 @@ const PatientAppointmentsScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await appointmentService.updateAppointment(appointmentId, { status: 'cancelled' });
-              // Refresh appointments after cancellation
-              loadAppointments();
+              setIsLoading(true);
+              console.log(`Attempting to cancel appointment ${appointmentId}`);
+              
+              // Update the appointment status in the database
+              const response = await appointmentService.updateAppointment(appointmentId, { status: 'cancelled' });
+              console.log('Cancellation response:', response);
+              
+              // Update the local state by modifying the appointment's status
+              setAppointments(prevAppointments => 
+                prevAppointments.map(apt => 
+                  apt.id === appointmentId 
+                    ? { ...apt, status: 'cancelled' } 
+                    : apt
+                )
+              );
+              
+              // Force switch to cancelled tab after successful cancellation
+              setActiveFilter('cancelled');
+              
+              // Refresh appointments to ensure UI is in sync with backend
+              await loadAppointments();
+              
+              // Show success message
               Alert.alert('Success', 'Appointment cancelled successfully');
             } catch (error) {
               console.error('Failed to cancel appointment:', error);
               Alert.alert('Error', 'Failed to cancel appointment. Please try again later.');
+            } finally {
+              setIsLoading(false);
             }
           }
         }
@@ -147,7 +343,11 @@ const PatientAppointmentsScreen: React.FC = () => {
   };
 
   const navigateToBookAppointment = () => {
-    navigation.navigate('BookAppointment');
+    // Navigate to the Doctors tab first, then to the BookAppointment screen
+    navigation.navigate('Doctors', {
+      screen: 'DoctorsList',
+      // After showing the doctors list, user can select a doctor to book with
+    });
   };
 
   const showAppointmentOptions = (appointment: Appointment) => {
@@ -366,7 +566,23 @@ const PatientAppointmentsScreen: React.FC = () => {
               
               <TouchableOpacity 
                 style={styles.modalOption}
-                onPress={() => handleCancelAppointment(selectedAppointment?.id || '')}
+                onPress={async () => {
+                  console.log('Cancel button pressed, appointment ID:', selectedAppointment?.id);
+                  if (selectedAppointment?.id) {
+                    setModalVisible(false); // Close the modal first
+                    
+                    // Use the direct cancellation function instead
+                    const success = await cancelAppointment(selectedAppointment.id);
+                    
+                    if (success) {
+                      Alert.alert('Success', 'Appointment cancelled successfully');
+                    } else {
+                      Alert.alert('Error', 'Failed to cancel appointment. Please try again.');
+                    }
+                  } else {
+                    Alert.alert('Error', 'Cannot identify the appointment to cancel.');
+                  }
+                }}
               >
                 <Ionicons name="close-circle-outline" size={22} color="#dc3545" />
                 <Text style={[styles.modalOptionText, { color: '#dc3545' }]}>Cancel</Text>
