@@ -15,7 +15,7 @@ export const resetApiUrlPreferences = async () => {
     await AsyncStorage.removeItem('@PulseCare:useAutoDetect');
     
     console.log('Successfully cleared all stored API URL preferences');
-    console.log('App will now use the default actual IP address (192.168.3.1:5000/api)');
+    console.log('App will now use the default actual IP address (192.168.3.16:5000/api)');
     
     return true;
   } catch (error) {
@@ -30,8 +30,8 @@ export const setPreferredApiUrl = async (useActualIp = true) => {
     if (useActualIp) {
       // Store a preference to use actual IP
       await AsyncStorage.setItem('@PulseCare:useAutoDetect', 'true');
-      await AsyncStorage.setItem('@PulseCare:lastWorkingUrl', 'http://192.168.3.1:5000/api');
-      console.log('Set preferred URL to actual IP: http://192.168.3.1:5000/api');
+      await AsyncStorage.setItem('@PulseCare:lastWorkingUrl', 'http://192.168.3.16:5000/api');
+      console.log('Set preferred URL to actual IP: http://192.168.3.16:5000/api');
     } else {
       // Store a preference to use localhost
       await AsyncStorage.setItem('@PulseCare:useAutoDetect', 'false');
