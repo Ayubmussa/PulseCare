@@ -80,34 +80,28 @@ const StaffProfileScreen = () => {
         role: profileData.role || 'Staff Member',
         email: profileData.email || 'N/A',
         phoneNumber: profileData.phoneNumber || profileData.phone || 'N/A',
-        employeeId: profileData.employeeId || `STAFF-${profileData.id.substring(0, 4)}`,
+        employeeId: profileData.employeeId || profileData.employee_id || `STAFF-${profileData.id.substring(0, 4)}`,
         department: profileData.department || 'General',
-        joinDate: formatDate(profileData.joinDate || profileData.createdAt),
-        workHours: profileData.workHours || 'Mon-Fri, 9:00 AM - 5:00 PM',
+        joinDate: formatDate(profileData.joinDate || profileData.join_date || profileData.createdAt || profileData.created_at),
+        workHours: profileData.workHours || profileData.work_hours || 'Mon-Fri, 9:00 AM - 5:00 PM',
         supervisor: profileData.supervisor || 'N/A',
-        image: profileData.image,
+        image: profileData.image || profileData.profile_image,
         status: profileData.status || 'active'
       });
     } catch (err) {
       console.error('Failed to fetch staff profile:', err);
       setError('Failed to load profile data. Please try again.');
-      
-      // Use fallback data for development or demo purposes
-      if (user) {
-        setStaffInfo({
-          id: user.id,
-          name: user.name || 'Staff Member',
-          role: user.role || 'Clinic Staff',
-          email: user.email || 'staff@pulsecare.com',
-          phoneNumber: '+1 (555) 123-4567',
-          employeeId: `STAFF-${user.id.substring(0, 4)}`,
-          department: 'Administration',
-          joinDate: 'Jan 15, 2023',
-          workHours: 'Mon-Fri, 9:00 AM - 5:00 PM',
-          supervisor: 'Dr. James Wilson, Medical Director',
-          status: 'active'
-        });
-      }
+      Alert.alert(
+        'Error Loading Profile',
+        'We were unable to load your profile information. Please check your connection and try again.',
+        [
+          { text: 'OK' },
+          { 
+            text: 'Retry', 
+            onPress: () => fetchStaffProfile() 
+          }
+        ]
+      );
     } finally {
       setLoading(false);
     }

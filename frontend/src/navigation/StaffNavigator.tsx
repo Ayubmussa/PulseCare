@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Import staff screens
 import StaffHomeScreen from '../screens/staff/StaffHomeScreen';
-import StaffClinicInfoScreen from '../screens/staff/StaffClinicInfoScreen';
 import StaffManageAppointmentsScreen from '../screens/staff/StaffManageAppointmentsScreen';
 import StaffManageDoctorsScreen from '../screens/staff/StaffManageDoctorsScreen';
 import StaffManagePatientsScreen from '../screens/staff/StaffManagePatientsScreen';
@@ -28,11 +27,6 @@ const HomeStackNavigator = () => {
         name="StaffHome"
         component={StaffHomeScreen}
         options={{ headerShown: false }}
-      />
-      <HomeStack.Screen
-        name="ClinicInfo"
-        component={StaffClinicInfoScreen}
-        options={{ title: 'Clinic Information' }}
       />
     </HomeStack.Navigator>
   );

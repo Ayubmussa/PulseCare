@@ -87,6 +87,7 @@ const PatientAppointmentDetailsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('****** CANCELLATION FLOW STARTED ******');
               console.log('Starting appointment cancellation for ID:', appointmentId);
               setIsLoading(true);
               
@@ -96,79 +97,33 @@ const PatientAppointmentDetailsScreen = () => {
               // Optimistically update the UI immediately for better user experience
               setAppointment({ ...appointment, status: 'cancelled' });
               
-              // Try to send the update to the API using the specialized cancellation function
-              try {
-                // Make the cancellation request with the specialized function for better reliability
-                console.log(`Using specialized cancelAppointment function for ID: ${appointmentId}`);
-                const result = await appointmentService.cancelAppointment(appointmentId);
-                
-                console.log('Cancellation API response:', result);
-                
-                // Verify the cancellation was successful
-                const verifyAppointment = await appointmentService.getAppointmentById(appointmentId);
-                console.log('Verification status after cancellation:', verifyAppointment.status);
-                
-                if (verifyAppointment.status !== 'cancelled') {
-                  console.warn('Appointment status not updated to cancelled in database. Retrying...');
-                  // Try one more time with direct update as fallback
-                  await appointmentService.updateAppointment(appointmentId, { status: 'cancelled' });
-                }
-                
-                // Show success message
-                Alert.alert(
-                  'Success', 
-                  'Appointment cancelled successfully',
-                  [{ 
-                    text: 'OK', 
-                    onPress: () => {
-                      // Navigate back to appointment list and refresh
-                      navigation.navigate('Appointments', { 
-                        screen: 'PatientAppointments',
-                        params: { initialFilter: 'cancelled', refresh: true } 
-                      });
-                    } 
-                  }]
-                );
-              } catch (apiError) {
-                console.error('API Error during cancellation:', apiError);
-                
-                // Offer manual retry if the API fails
-                Alert.alert(
-                  'Connection Issue', 
-                  'We had trouble connecting to the server. Would you like to try again?',
-                  [
-                    { 
-                      text: 'Revert', 
-                      onPress: () => {
-                        // Revert to original state
-                        setAppointment(originalAppointmentState);
-                        setIsLoading(false);
-                      }
-                    },
-                    {
-                      text: 'Try Again',
-                      onPress: () => handleCancelAppointment()
-                    },
-                    {
-                      text: 'Stay Cancelled',
-                      style: 'destructive',
-                      onPress: () => {
-                        // Keep the UI updated even if API failed
-                        Alert.alert(
-                          'Note', 
-                          'The appointment has been marked as cancelled locally. Please check later to confirm the cancellation was processed.',
-                          [{ 
-                            text: 'OK', 
-                            onPress: () => navigation.goBack()
-                          }]
-                        );
-                      }
-                    }
-                  ]
-                );
-              }
+              // Use the dedicated cancelAppointment method for more reliable cancellation
+              const result = await appointmentService.cancelAppointment(appointmentId);
+              
+              console.log('✅ Cancellation API response received:', result);
+              
+              // Show success message
+              Alert.alert(
+                'Success', 
+                'Appointment cancelled successfully',
+                [{ 
+                  text: 'OK', 
+                  onPress: () => {
+                    console.log('Navigating back to appointment list with refresh flag');
+                    // Navigate back to appointment list and refresh
+                    navigation.navigate('Appointments', { 
+                      screen: 'PatientAppointments',
+                      params: { initialFilter: 'cancelled', refresh: true } 
+                    });
+                  } 
+                }]
+              );
             } catch (error) {
               console.error('Error in cancel appointment flow:', error);
+              console.error('Full error object:', JSON.stringify(error, null, 2));
+              
+              // Revert to original state if there's an error
+              setAppointment(appointment);
               Alert.alert('Error', 'Failed to cancel appointment. Please try again.');
               setIsLoading(false);
             } finally {
@@ -184,9 +139,12 @@ const PatientAppointmentDetailsScreen = () => {
   };
   
   const handleRescheduleAppointment = () => {
-    navigation.navigate('BookAppointment', { 
-      doctorId: appointment.doctor_id,
-      rescheduleAppointmentId: appointmentId
+    navigation.navigate('Doctors', { 
+      screen: 'BookAppointment',
+      params: {
+        doctorId: appointment.doctor_id,
+        rescheduleAppointmentId: appointmentId
+      }
     });
   };
   

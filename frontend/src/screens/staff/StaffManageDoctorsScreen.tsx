@@ -32,7 +32,7 @@ interface Doctor {
   phone?: string; // Added for backend compatibility
   email?: string;
   workDays?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'active' | 'inactive';
+  status: 'active' | 'inactive';
   registeredAt?: string;
   yearsExperience?: number;
   education?: string;
@@ -64,14 +64,6 @@ const StaffManageDoctorsScreen: React.FC = () => {
   const [specialties, setSpecialties] = useState<Specialty[]>([{ id: 'all', name: 'All' }]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [filterModalVisible, setFilterModalVisible] = useState<boolean>(false);
-  const [pendingApprovals, setPendingApprovals] = useState<number>(0);
-  
-  // Modal states for approval/rejection
-  const [approvalModalVisible, setApprovalModalVisible] = useState<boolean>(false);
-  const [rejectionModalVisible, setRejectionModalVisible] = useState<boolean>(false);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [approvalComments, setApprovalComments] = useState<string>('');
-  const [rejectionReason, setRejectionReason] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
   // Fetch doctors from API when component mounts
@@ -88,7 +80,7 @@ const StaffManageDoctorsScreen: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // Use staffService instead of doctorService to get all doctors including pending registrations
+      // Use staffService instead of doctorService to get all doctors 
       const doctorsData = await staffService.getAllDoctors();
       
       // Transform data to handle different field names
@@ -98,17 +90,11 @@ const StaffManageDoctorsScreen: React.FC = () => {
         image: doctor.imageUrl || doctor.image || null,
         // Handle phone field variations
         phoneNumber: doctor.phone || doctor.phoneNumber || null,
-        // Ensure status is in expected format
-        status: doctor.status || 'pending',
+        // Only keep active or inactive status
+        status: doctor.status === 'active' ? 'active' : 'inactive',
       }));
       
       setDoctors(normalizedDoctors);
-      
-      // Count pending approvals
-      const pendingCount = normalizedDoctors.filter(
-        (doctor: Doctor) => doctor.status === 'pending'
-      ).length;
-      setPendingApprovals(pendingCount);
       
       // Extract unique specialties from the doctor data
       const uniqueSpecialties = new Set<string>();
@@ -170,7 +156,14 @@ const StaffManageDoctorsScreen: React.FC = () => {
   };
 
   const handleAddDoctor = (): void => {
-    navigation.navigate('AddDoctor');
+    // Since there's no AddDoctor screen yet, show an alert instead
+    Alert.alert(
+      "Feature Not Available",
+      "The add doctor feature is coming soon.",
+      [{ text: "OK" }]
+    );
+    // When the screen is created, uncomment this line:
+    // navigation.navigate('AddDoctor');
   };
 
   const handleSearch = (text: string): void => {
@@ -184,93 +177,6 @@ const StaffManageDoctorsScreen: React.FC = () => {
   const handleStatusFilter = (status: string): void => {
     setSelectedStatus(status);
     setFilterModalVisible(false);
-  };
-
-  const handleApproveDoctor = (doctor: Doctor): void => {
-    setSelectedDoctor(doctor);
-    setApprovalComments('');
-    setApprovalModalVisible(true);
-  };
-
-  const handleRejectDoctor = (doctor: Doctor): void => {
-    setSelectedDoctor(doctor);
-    setRejectionReason('');
-    setRejectionModalVisible(true);
-  };
-
-  const confirmApproveDoctor = async (): Promise<void> => {
-    if (!selectedDoctor || !user) return;
-    
-    try {
-      setActionLoading(true);
-      await staffService.approveDoctor(
-        selectedDoctor.id, 
-        user.id, 
-        approvalComments
-      );
-      
-      // Update local state
-      const updatedDoctors = doctors.map(doc => {
-        if (doc.id === selectedDoctor.id) {
-          return { ...doc, status: 'approved' as const };
-        }
-        return doc;
-      });
-      
-      setDoctors(updatedDoctors);
-      setPendingApprovals(prev => Math.max(0, prev - 1));
-      
-      // Close modal
-      setApprovalModalVisible(false);
-      setSelectedDoctor(null);
-      
-      Alert.alert('Success', `Dr. ${selectedDoctor.name}'s registration has been approved.`);
-    } catch (error) {
-      console.error('Failed to approve doctor:', error);
-      Alert.alert('Error', 'Failed to approve doctor registration. Please try again.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const confirmRejectDoctor = async (): Promise<void> => {
-    if (!selectedDoctor || !user) return;
-    
-    if (!rejectionReason.trim()) {
-      Alert.alert('Required', 'Please provide a reason for rejection');
-      return;
-    }
-    
-    try {
-      setActionLoading(true);
-      await staffService.rejectDoctor(
-        selectedDoctor.id, 
-        user.id, 
-        rejectionReason
-      );
-      
-      // Update local state
-      const updatedDoctors = doctors.map(doc => {
-        if (doc.id === selectedDoctor.id) {
-          return { ...doc, status: 'rejected' as const };
-        }
-        return doc;
-      });
-      
-      setDoctors(updatedDoctors);
-      setPendingApprovals(prev => Math.max(0, prev - 1));
-      
-      // Close modal
-      setRejectionModalVisible(false);
-      setSelectedDoctor(null);
-      
-      Alert.alert('Doctor Rejected', `Dr. ${selectedDoctor.name}'s registration has been rejected.`);
-    } catch (error) {
-      console.error('Failed to reject doctor:', error);
-      Alert.alert('Error', 'Failed to reject doctor registration. Please try again.');
-    } finally {
-      setActionLoading(false);
-    }
   };
 
   const handleUpdateDoctorStatus = async (doctor: Doctor, newStatus: 'active' | 'inactive'): Promise<void> => {
@@ -330,18 +236,9 @@ const StaffManageDoctorsScreen: React.FC = () => {
     let label = '';
     
     switch (status) {
-      case 'pending':
-        color = '#ffc107'; // Warning yellow
-        label = 'Pending';
-        break;
-      case 'approved':
       case 'active':
         color = '#28a745'; // Success green
-        label = status === 'approved' ? 'Approved' : 'Active';
-        break;
-      case 'rejected':
-        color = '#dc3545'; // Danger red
-        label = 'Rejected';
+        label = 'Active';
         break;
       case 'inactive':
         color = '#6c757d'; // Secondary gray
@@ -362,26 +259,6 @@ const StaffManageDoctorsScreen: React.FC = () => {
   // Render action buttons based on doctor status
   const renderActionButtons = (doctor: Doctor) => {
     switch (doctor.status) {
-      case 'pending':
-        return (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={() => handleApproveDoctor(doctor)}
-            >
-              <Ionicons name="checkmark" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>Approve</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.rejectButton]}
-              onPress={() => handleRejectDoctor(doctor)}
-            >
-              <Ionicons name="close" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>Reject</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'approved':
       case 'active':
         return (
           <View style={styles.actionButtons}>
@@ -398,18 +275,6 @@ const StaffManageDoctorsScreen: React.FC = () => {
             >
               <Ionicons name="power" size={16} color="#fff" />
               <Text style={styles.actionButtonText}>Deactivate</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'rejected':
-        return (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.viewButton]}
-              onPress={() => navigateToDoctorDetails(doctor.id, doctor.name)}
-            >
-              <Ionicons name="eye" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>View</Text>
             </TouchableOpacity>
           </View>
         );
@@ -457,14 +322,9 @@ const StaffManageDoctorsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header with title and pending registrations badge */}
+      {/* Header with title */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Manage Doctors</Text>
-        {pendingApprovals > 0 && (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>{pendingApprovals}</Text>
-          </View>
-        )}
       </View>
 
       {/* Search and Filter Bar */}
@@ -591,7 +451,7 @@ const StaffManageDoctorsScreen: React.FC = () => {
             
             <Text style={styles.filterSectionTitle}>Status</Text>
             <View style={styles.filterOptions}>
-              {['all', 'pending', 'approved', 'active', 'inactive', 'rejected'].map((status) => (
+              {['all', 'active', 'inactive'].map((status) => (
                 <TouchableOpacity
                   key={status}
                   style={[
@@ -611,120 +471,6 @@ const StaffManageDoctorsScreen: React.FC = () => {
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Approval Modal */}
-      <Modal
-        visible={approvalModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setApprovalModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Approve Doctor</Text>
-              <TouchableOpacity onPress={() => setApprovalModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-            
-            {selectedDoctor && (
-              <View style={styles.modalBody}>
-                <Text style={styles.modalText}>
-                  Are you sure you want to approve Dr. {selectedDoctor.name}?
-                </Text>
-                
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Add comments (optional)"
-                  value={approvalComments}
-                  onChangeText={setApprovalComments}
-                  multiline={true}
-                  numberOfLines={3}
-                />
-                
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalCancelButton]}
-                    onPress={() => setApprovalModalVisible(false)}
-                    disabled={actionLoading}
-                  >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalConfirmButton]}
-                    onPress={confirmApproveDoctor}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.modalButtonText}>Approve</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Rejection Modal */}
-      <Modal
-        visible={rejectionModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setRejectionModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reject Doctor</Text>
-              <TouchableOpacity onPress={() => setRejectionModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-            
-            {selectedDoctor && (
-              <View style={styles.modalBody}>
-                <Text style={styles.modalText}>
-                  Are you sure you want to reject Dr. {selectedDoctor.name}'s application?
-                </Text>
-                
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="Reason for rejection (required)"
-                  value={rejectionReason}
-                  onChangeText={setRejectionReason}
-                  multiline={true}
-                  numberOfLines={3}
-                />
-                
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalCancelButton]}
-                    onPress={() => setRejectionModalVisible(false)}
-                    disabled={actionLoading}
-                  >
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalRejectButton]}
-                    onPress={confirmRejectDoctor}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.modalButtonText}>Reject</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
           </View>
         </View>
       </Modal>
@@ -754,19 +500,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#212529',
-  },
-  pendingBadge: {
-    backgroundColor: '#ffc107',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pendingBadgeText: {
-    color: '#212529',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -894,12 +627,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#fff',
   },
-  approveButton: {
-    backgroundColor: '#28a745',
-  },
-  rejectButton: {
-    backgroundColor: '#dc3545',
-  },
   viewButton: {
     backgroundColor: '#007bff',
   },
@@ -991,51 +718,6 @@ const styles = StyleSheet.create({
     color: '#495057',
   },
   activeFilterOptionText: {
-    color: '#fff',
-  },
-  modalBody: {
-    marginTop: 8,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#343a40',
-    marginBottom: 16,
-  },
-  modalInput: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 16,
-    color: '#343a40',
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    textAlignVertical: 'top',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginLeft: 12,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  modalCancelButton: {
-    backgroundColor: '#e9ecef',
-  },
-  modalConfirmButton: {
-    backgroundColor: '#28a745',
-  },
-  modalRejectButton: {
-    backgroundColor: '#dc3545',
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
     color: '#fff',
   },
 });

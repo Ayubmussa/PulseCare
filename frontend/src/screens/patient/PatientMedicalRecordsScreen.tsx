@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { medicalHistoryService } from '../../services/api';
+
+// Define types for navigation
+type RootStackParamList = {
+  PatientMedicalRecords: undefined;
+  PatientDocuments: undefined;
+};
 
 // Define types for medical record
 interface MedicalRecord {
@@ -15,13 +20,8 @@ interface MedicalRecord {
   date: string;
 }
 
-// Define navigation type
-type PatientNavigationProps = {
-  PatientDocuments: undefined;
-}
-
 const PatientMedicalRecordsScreen = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<PatientNavigationProps>>();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { user } = useAuth();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -81,11 +81,15 @@ const DoctorMedicalRecordScreen: React.FC = () => {
   };
 
   const handleEditRecord = () => {
-    navigation.navigate('EditMedicalRecord', { 
-      recordId, 
-      patientId,
-      patientName,
-      onReturn: loadMedicalRecord 
+    // Navigate to the root Patient stack if EditMedicalRecord doesn't exist
+    navigation.navigate('Patients', { 
+      screen: 'PatientDetails', 
+      params: {
+        id: patientId, 
+        patientName,
+        selectedTab: 'records',
+        recordToEdit: recordId
+      }
     });
   };
 
@@ -152,7 +156,21 @@ Follow-Up: ${record.followUp || 'None specified'}
   };
 
   const navigateToPatientDetails = () => {
-    navigation.navigate('PatientDetails', { id: patientId, patientName });
+    // First check the current navigation context to determine proper route
+    const currentRoute = navigation.getState().routes;
+    const currentStack = currentRoute[0]?.name;
+    
+    // Navigate based on which navigator we're in
+    if (currentStack === 'Patients') {
+      // Already in Patients tab, just navigate to details
+      navigation.navigate('PatientDetails', { id: patientId, patientName });
+    } else {
+      // Need to navigate to Patients tab first and then details
+      navigation.navigate('Patients', {
+        screen: 'PatientDetails',
+        params: { id: patientId, patientName }
+      });
+    }
   };
 
   // Format date for display
@@ -295,7 +313,11 @@ Follow-Up: ${record.followUp || 'None specified'}
               <TouchableOpacity 
                 key={attachment.id}
                 style={styles.attachmentItem}
-                onPress={() => navigation.navigate('ViewAttachment', { attachment })}
+                onPress={() => Alert.alert(
+                  'View Attachment',
+                  'Opening attachment: ' + attachment.name,
+                  [{ text: 'OK' }]
+                )}
               >
                 <Ionicons 
                   name={

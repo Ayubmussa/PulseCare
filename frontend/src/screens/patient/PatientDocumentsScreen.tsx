@@ -13,11 +13,17 @@ import {
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { documentService } from '../../services/api';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+
+// Define type for navigation
+type RootStackParamList = {
+  PatientDocuments: undefined;
+  PatientMedicalRecords: undefined;
+};
 
 // Define type for document
 interface Document {
@@ -41,7 +47,7 @@ interface SelectedFile {
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const PatientDocumentsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -276,6 +282,20 @@ const PatientDocumentsScreen = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const navigateToMedicalRecords = () => {
+    navigation.navigate('PatientMedicalRecords');
+  };
+
+  const safeCloseModal = (modalSetter: React.Dispatch<React.SetStateAction<boolean>>, resetState = true) => {
+    modalSetter(false);
+    if (resetState) {
+      setSelectedDocument(null);
+      setSelectedFile(null);
+      setDocumentName('');
+      setDocumentType('');
+    }
+  };
+
   const renderDocumentItem = ({ item }: { item: Document }) => (
     <TouchableOpacity 
       style={styles.documentItem}
@@ -339,7 +359,7 @@ const PatientDocumentsScreen = () => {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => safeCloseModal(setModalVisible)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -349,7 +369,7 @@ const PatientDocumentsScreen = () => {
               </Text>
               <TouchableOpacity 
                 style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
+                onPress={() => safeCloseModal(setModalVisible)}
               >
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
@@ -401,7 +421,7 @@ const PatientDocumentsScreen = () => {
         animationType="slide"
         transparent={true}
         visible={uploadModalVisible}
-        onRequestClose={() => setUploadModalVisible(false)}
+        onRequestClose={() => safeCloseModal(setUploadModalVisible)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -411,8 +431,7 @@ const PatientDocumentsScreen = () => {
                 style={styles.closeButton}
                 onPress={() => {
                   if (!uploadLoading) {
-                    setUploadModalVisible(false);
-                    setSelectedFile(null);
+                    safeCloseModal(setUploadModalVisible);
                   }
                 }}
               >

@@ -19,7 +19,6 @@ import { useAuth } from '../../context/AuthContext';
 const ForgotPasswordScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [userType, setUserType] = useState<'patient' | 'doctor' | 'staff'>('patient');
   const [isLoading, setIsLoading] = useState(false);
   const [isEmailSent, setIsEmailSent] = useState(false);
 
@@ -45,21 +44,15 @@ const ForgotPasswordScreen: React.FC = () => {
 
     try {
       setIsLoading(true);
-      // Pass the new password to resetPassword function
-      await resetPassword(email, userType, newPassword);
+      // Pass the email and new password to the backend without specifying user type
+      await resetPassword(email, null, newPassword);
       setIsEmailSent(true);
     } catch (error: any) {
       console.error('Password reset failed:', error);
       
       // Provide user feedback
       if (error.response && error.response.status === 404) {
-        if (userType === 'patient') {
-          Alert.alert('Error', 'Patient account not found. Please check your email or register as a new patient.');
-        } else if (userType === 'doctor') {
-          Alert.alert('Error', 'Doctor account not found. Please check your email or contact administration.');
-        } else if (userType === 'staff') {
-          Alert.alert('Error', 'Staff account not found. Please check your email or contact administration.');
-        }
+        Alert.alert('Error', 'Account not found. Please check your email or register if you\'re a new patient.');
       } else {
         Alert.alert('Error', 'Unable to process your request. Please try again later.');
       }
@@ -94,53 +87,6 @@ const ForgotPasswordScreen: React.FC = () => {
               <Text style={styles.subtitleText}>
                 Enter your email and new password to reset your account
               </Text>
-
-              <View style={styles.userTypeContainer}>
-                <TouchableOpacity 
-                  style={[
-                    styles.userTypeButton, 
-                    userType === 'patient' && styles.activeUserTypeButton
-                  ]}
-                  onPress={() => setUserType('patient')}
-                >
-                  <Text style={[
-                    styles.userTypeText,
-                    userType === 'patient' && styles.activeUserTypeText
-                  ]}>
-                    Patient
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[
-                    styles.userTypeButton, 
-                    userType === 'doctor' && styles.activeUserTypeButton
-                  ]}
-                  onPress={() => setUserType('doctor')}
-                >
-                  <Text style={[
-                    styles.userTypeText,
-                    userType === 'doctor' && styles.activeUserTypeText
-                  ]}>
-                    Doctor
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[
-                    styles.userTypeButton, 
-                    userType === 'staff' && styles.activeUserTypeButton
-                  ]}
-                  onPress={() => setUserType('staff')}
-                >
-                  <Text style={[
-                    styles.userTypeText,
-                    userType === 'staff' && styles.activeUserTypeText
-                  ]}>
-                    Staff
-                  </Text>
-                </TouchableOpacity>
-              </View>
 
               <View style={styles.inputContainer}>
                 <Ionicons name="mail-outline" size={20} color="#6c757d" style={styles.inputIcon} />
@@ -247,35 +193,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     marginBottom: 25,
-  },
-  userTypeContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: '#e9ecef',
-    borderRadius: 10,
-    padding: 4,
-  },
-  userTypeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeUserTypeButton: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  userTypeText: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
-  activeUserTypeText: {
-    color: '#007bff',
-    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'row',

@@ -219,19 +219,65 @@ const DoctorAppointmentDetailsScreen: React.FC = () => {
   };
 
   const handleUpdateNotes = async () => {
-    navigation.navigate('UpdateAppointmentNotes', { 
-      appointmentId, 
-      currentNotes: appointment?.notes || '',
-      onReturn: loadAppointmentDetails
-    });
+    try {
+      // First try to navigate to UpdateAppointmentNotes
+      navigation.navigate('UpdateAppointmentNotes', { 
+        appointmentId, 
+        currentNotes: appointment?.notes || '',
+        onReturn: loadAppointmentDetails
+      });
+    } catch (error) {
+      // If the screen doesn't exist in the navigator, show an alert with edit option
+      console.log('Navigation to UpdateAppointmentNotes failed:', error);
+      Alert.prompt(
+        'Edit Notes',
+        'Update appointment notes:',
+        async (text) => {
+          if (text !== null && text !== undefined) {
+            try {
+              setIsLoading(true);
+              await appointmentService.updateAppointment(appointmentId, { notes: text });
+              await loadAppointmentDetails();
+              Alert.alert('Success', 'Notes updated successfully');
+            } catch (updateError) {
+              console.error('Failed to update notes:', updateError);
+              Alert.alert('Error', 'Failed to update notes. Please try again.');
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        },
+        'plain-text',
+        appointment?.notes || ''
+      );
+    }
   };
 
   const navigateToPatientDetails = () => {
     if (appointment) {
-      navigation.navigate('PatientDetails', { 
-        id: appointment.patientId,
-        patientName: appointment.patientName
-      });
+      try {
+        // Use the correct screen name 'PatientDetails' instead of 'DoctorPatientDetails'
+        navigation.navigate('PatientDetails', { 
+          id: appointment.patientId,
+          patientName: appointment.patientName
+        });
+      } catch (error) {
+        // Fall back to nested navigation if direct fails
+        console.log('Direct navigation failed, trying nested navigation', error);
+        try {
+          // Try navigating through the Patients tab
+          navigation.navigate('Patients', {
+            screen: 'PatientDetails',
+            params: { 
+              id: appointment.patientId,
+              patientName: appointment.patientName 
+            }
+          });
+        } catch (nestedError) {
+          console.error('All navigation attempts failed:', nestedError);
+          Alert.alert('Navigation Error', 'Unable to navigate to patient details screen.');
+        }
+      }
     }
   };
 

@@ -142,17 +142,31 @@ const DoctorHomeScreen: React.FC = () => {
 
   // Navigate to appointment details
   const navigateToAppointmentDetails = (appointmentId: string) => {
-    navigation.navigate('AppointmentDetails', { id: appointmentId });
+    navigation.navigate('Appointments', {
+      screen: 'AppointmentDetails',
+      params: { id: appointmentId }
+    });
   };
 
   // Navigate to patient details
   const navigateToPatientDetails = (patientId: string, patientName: string) => {
-    navigation.navigate('PatientDetails', { id: patientId, patientName });
+    navigation.navigate('Patients', {
+      screen: 'PatientDetails',
+      params: { id: patientId, patientName }
+    });
   };
 
   // Navigate to quick access service
   const navigateToService = (route: string) => {
-    navigation.navigate(route);
+    if (route === 'PatientList' || route === 'DoctorAppointments' || route === 'DoctorChat') {
+      // These routes are tab screens, so navigate to the tab directly
+      const tabName = route === 'PatientList' ? 'Patients' : 
+                      route === 'DoctorAppointments' ? 'Appointments' : 'Chat';
+      navigation.navigate(tabName);
+    } else {
+      // For screens within the current stack
+      navigation.navigate(route);
+    }
   };
 
   // Format time for display

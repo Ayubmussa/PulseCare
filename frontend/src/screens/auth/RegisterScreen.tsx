@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
+
 const RegisterScreen: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -232,6 +233,7 @@ const RegisterScreen: React.FC = () => {
               <Text style={styles.loginLink}> Login</Text>
             </TouchableOpacity>
           </View>
+          
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

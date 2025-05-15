@@ -1,15 +1,306 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 
-// Set up base URL for API calls
-const API_URL = 'http://localhost:5000/api';
+// Import the reset utility
+import { resetApiUrlPreferences } from '../utils/resetApiUrls';
+
+// Direct utility to get network info when needed
+const getNetworkInfo = () => NetInfo.fetch();
+
+// Import helper to specifically clear Android emulator URLs
+import { clearEmulatorUrls, forceUseActualIpAddress } from '../utils/clearEmulatorUrls';
+
+// Reset any stored API URLs on app startup to ensure consistent behavior
+resetApiUrlPreferences()
+  .then(success => {
+    if (success) {
+      console.log('API URL preferences reset on startup');
+    }
+    // Also clear any Android emulator URLs
+    return clearEmulatorUrls();
+  })
+  .then(result => {
+    if (result.clearedUrls && result.clearedUrls.length > 0) {
+      console.log('Found and removed Android emulator URLs');
+      return forceUseActualIpAddress();
+    }
+  })
+  .catch(err => {
+    console.error('Failed to reset API URL preferences:', err);
+  });
+
+// Generate possible server URLs to try
+const generatePossibleServerUrls = async (port: number, path: string): Promise<string[]> => {
+  // Create URLs with proper formatting
+  const LOCALHOST_URL = `http://localhost:${port}${path}`;
+  const ACTUAL_IP_URL = `http://192.168.3.16:${port}${path}`;  // Your actual machine IP address
+  
+  // Return prioritized array of URLs to try (actual IP first for mobile devices)
+  const urls = [ACTUAL_IP_URL, LOCALHOST_URL];
+  console.log('Generated API URLs to try:', urls);
+  return urls;
+};
+
+// Set up base URLs for API calls
+const API_PORT = 5000;
+const API_PATH = '/api';
+
+// Define URLs
+const LOCALHOST_URL = 'http://localhost:5000/api';
+const ACTUAL_IP_URL = 'http://192.168.3.16:5000/api';  // Your actual machine IP address
+
+// Use the actual IP as default for better mobile device connectivity
+const DEFAULT_DEVICE_URL = ACTUAL_IP_URL;
+
+// Function to get all possible URLs to try
+const getPossibleApiUrls = async () => {
+  // Generate a list of possible server URLs to try
+  return await generatePossibleServerUrls(API_PORT, API_PATH);
+};
+
+// Store the working API URL
+let CURRENT_API_URL = LOCALHOST_URL;
+
+// Function to get the stored API URL preference or use default
+const getApiUrl = async () => {
+  try {
+    // First check if user has manually set a specific URL
+    const storedUrl = await AsyncStorage.getItem('@PulseCare:manualApiUrl');
+    if (storedUrl) {
+      console.log('Using manually configured API URL:', storedUrl);
+      return storedUrl;
+    }
+    
+    // Otherwise check if we should use auto-detection or localhost
+    const useAutoDetect = await AsyncStorage.getItem('@PulseCare:useAutoDetect');
+    
+    // If explicitly set to 'false', use localhost
+    if (useAutoDetect === 'false') {
+      return LOCALHOST_URL;
+    }
+    
+    // Get the stored working URL from previous sessions
+    const lastWorkingUrl = await AsyncStorage.getItem('@PulseCare:lastWorkingUrl');
+    if (lastWorkingUrl) {
+      return lastWorkingUrl;
+    }
+    
+    // If we get here, always prioritize the actual IP address for mobile devices
+    console.log('Using actual IP address for connection:', ACTUAL_IP_URL);
+    return ACTUAL_IP_URL;
+  } catch (error) {
+    console.warn('Failed to get API URL preference:', error);
+    return ACTUAL_IP_URL; // Default to actual IP as fallback
+  }
+};
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_URL,
+  // Base URL will be set in the interceptor
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 second timeout
 });
+
+// Store a list of URLs that have been tried and failed
+const failedUrls = new Set<string>();
+
+// Function to set a specific API URL manually
+export const setManualApiUrl = async (url: string) => {
+  if (!url.startsWith('http')) {
+    url = `http://${url}`;
+  }
+  if (!url.endsWith('/api') && !url.endsWith('/api/')) {
+    url = `${url}/api`;
+  }
+  
+  try {
+    // Test if the URL is valid
+    await axios.get(`${url}`, { timeout: 3000 });
+    
+    // Save the URL if it works
+    api.defaults.baseURL = url;
+    await AsyncStorage.setItem('@PulseCare:manualApiUrl', url);
+    await AsyncStorage.setItem('@PulseCare:lastWorkingUrl', url);
+    console.log(`Manual API URL set to: ${url}`);
+    
+    return { success: true, url };
+  } catch (error) {
+    console.error(`Failed to connect to manual URL: ${url}`, error);
+    return { success: false, error };
+  }
+};
+
+// Function to switch the API base URL (can be called from your app)
+export const switchApiBaseUrl = async (url: string) => {
+  api.defaults.baseURL = url;
+  CURRENT_API_URL = url;
+  await AsyncStorage.setItem('@PulseCare:lastWorkingUrl', url);
+  console.log(`API base URL switched to: ${url}`);
+  return url;
+};
+
+// Function to automatically find a working API server
+export const findWorkingApiServer = async (): Promise<string> => {
+  const possibleUrls = await getPossibleApiUrls();
+  
+  // Try each URL in sequence
+  for (const url of possibleUrls) {
+    // Skip URLs we've already tried and failed
+    if (failedUrls.has(url)) continue;
+    
+    try {
+      console.log(`Testing connection to: ${url}`);
+      await axios.get(`${url}`, { timeout: 3000 });
+      
+      // If we get here, the URL works
+      console.log(`Found working API server at: ${url}`);
+      await switchApiBaseUrl(url);
+      
+      // Remember this working URL for next time
+      await AsyncStorage.setItem('@PulseCare:lastWorkingUrl', url);
+      return url;
+    } catch (error) {
+      console.log(`Failed to connect to: ${url}`);
+      failedUrls.add(url);
+    }
+  }
+  
+  console.log('Auto-detection unsuccessful, defaulting to actual IP address');
+  // Don't return null, always return the actual IP address which should work for devices on the same network
+  return ACTUAL_IP_URL;
+};
+
+// Initialize API URL on startup with comprehensive safety checks
+(async () => {
+  let initialUrl = await getApiUrl();
+  
+  // Check specifically for Android emulator URL (10.0.2.2) and replace it
+  // but keep localhost as an option for web browser testing
+  const androidEmulatorUrls = ['10.0.2.2'];
+  const containsEmulatorUrl = androidEmulatorUrls.some(url => initialUrl.includes(url));
+  
+  if (containsEmulatorUrl) {
+    console.warn('Found Android emulator URL - replacing with actual IP address');
+    // Replace with actual IP but keep the port and path
+    initialUrl = ACTUAL_IP_URL;
+    
+    // Clear any stored URLs that might contain emulator references
+    try {
+      await AsyncStorage.removeItem('@PulseCare:lastWorkingUrl');
+      await AsyncStorage.removeItem('@PulseCare:manualApiUrl');
+      // Force auto-detection for next time
+      await AsyncStorage.setItem('@PulseCare:useAutoDetect', 'true');
+    } catch (err) {
+      console.error('Error clearing stored URLs:', err);
+    }
+  }
+  
+  api.defaults.baseURL = initialUrl;
+  CURRENT_API_URL = initialUrl;
+  console.log(`Initial API base URL set to: ${initialUrl}`);
+})();
+
+// Add request interceptor to ensure correct API URL on every request
+api.interceptors.request.use(
+  async (config) => {
+    // If no baseURL is set, make sure to set it
+    if (!config.baseURL) {
+      const url = await getApiUrl();
+      config.baseURL = url;
+    }
+    
+    // Check if the baseURL contains the Android emulator URL and replace it
+    if (config.baseURL && typeof config.baseURL === 'string') {
+      if (config.baseURL.includes('10.0.2.2')) {
+        console.warn(`Found Android emulator URL in request: ${config.baseURL}`);
+        // Replace with actual IP address
+        config.baseURL = ACTUAL_IP_URL;
+      }
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Set up response interceptor for handling network errors
+api.interceptors.response.use(
+  (response) => response, // Pass successful responses through unchanged
+  async (error) => {
+    // Only attempt URL switching for network errors
+    if (error.message === 'Network Error' || error.code === 'ECONNABORTED') {
+      // Get the failed request config
+      const originalRequest = error.config;
+      
+      // Skip retry if the URL is explicitly marked to be skipped
+      const skipRetry = originalRequest._skipRetry;
+      if (skipRetry) {
+        return Promise.reject(error);
+      }
+      
+      // Track retry attempts
+      originalRequest._retryCount = originalRequest._retryCount || 0;
+      
+      // Prevent too many retries
+      if (originalRequest._retryCount >= 2) {
+        console.log('Maximum retry attempts reached, using default URL');
+        
+        // Don't try anymore, just use the default IP address which should work
+        const defaultUrl = ACTUAL_IP_URL;
+        
+        // Update request with default URL
+        const urlPath = originalRequest.url?.replace(originalRequest.baseURL || '', '') || '';
+        originalRequest.url = defaultUrl + urlPath;
+        originalRequest.baseURL = defaultUrl;
+        originalRequest._skipRetry = true; // Prevent further retries
+        
+        // Retry the request with the default URL
+        return axios(originalRequest);
+      }
+      
+      try {
+        // Increment retry counter
+        originalRequest._retryCount++;
+        
+        // Remember this failed URL
+        const currentUrl = api.defaults.baseURL;
+        if (currentUrl) {
+          failedUrls.add(currentUrl);
+        }
+        
+        // Try to find a working server
+        const newUrl = await findWorkingApiServer();
+        
+        // Update the request URL to use the new base URL
+        const urlPath = originalRequest.url?.replace(originalRequest.baseURL || '', '') || '';
+        originalRequest.url = newUrl + urlPath;
+        originalRequest.baseURL = newUrl;
+        
+        console.log(`Retrying request to ${originalRequest.url}`);
+        
+        // Retry the request with the new URL
+        return axios(originalRequest);
+      } catch (retryError) {
+        console.log('Error during request retry, using actual IP');
+        
+        // Use the actual IP as a last resort
+        const urlPath = originalRequest.url?.replace(originalRequest.baseURL || '', '') || '';
+        originalRequest.url = ACTUAL_IP_URL + urlPath;
+        originalRequest.baseURL = ACTUAL_IP_URL;
+        originalRequest._skipRetry = true; // Prevent further retries
+        
+        // Retry the request with the actual IP
+        return axios(originalRequest);
+      }
+    }
+    
+    // For other types of errors, just pass them through
+    return Promise.reject(error);
+  }
+);
 
 // Helper to set JWT token for authenticated requests
 export const setAuthToken = (token: string | null) => {
@@ -22,36 +313,71 @@ export const setAuthToken = (token: string | null) => {
 
 // Authentication services
 export const authService = {
-  login: async (email: string, password: string, userType: 'patient' | 'doctor' | 'staff') => {
+  login: async (email: string, password: string) => {
     try {
-      let endpoint: string;
-
-      switch (userType) {
-        case 'patient':
-          endpoint = '/patients/login';
-          break;
-        case 'doctor':
-          endpoint = '/doctors/login';
-          break;
-        case 'staff':
-          endpoint = '/staff/login';
-          break;
-        default:
-          throw new Error('Invalid user type');
+      console.log(`Attempting unified login for ${email}`);
+      
+      // Before attempting login, ensure we have a working connection
+      if (!api.defaults.baseURL) {
+        await findWorkingApiServer();
+        if (!api.defaults.baseURL) {
+          throw new Error('Unable to connect to server. Please check your network settings.');
+        }
       }
-
-      const { data } = await api.post(endpoint, {
+      
+      // Use the unified login endpoint that will check all user types
+      const { data } = await api.post('/auth/login', {
         email,
         password,
       });
+      
+      console.log(`Login response:`, { 
+        userReceived: !!data.user, 
+        tokenReceived: !!data.token,
+        userType: data.userType
+      });
 
-      // The response should contain user data, token, and userType
+      // Check if we received the required data from the response
+      if (!data.user) {
+        throw new Error(`Login response missing user data`);
+      }
+      
+      if (!data.token) {
+        throw new Error(`Login response missing authentication token`);
+      }
+
+      // Ensure the token is applied immediately
+      setAuthToken(data.token);
+      
+      // Return the same response structure to maintain compatibility
       return {
         user: data.user,
         token: data.token,
-        userType: userType, // Use the userType from the request
+        userType: data.userType
       };
     } catch (error) {
+      console.error(`Error during login:`, error);
+        // Provide detailed error information
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data;
+        console.error('Login API Error Details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: responseData,
+          message: error.message,
+          url: error.config?.url
+        });
+        
+        // Check if this is a 404 error which might indicate user not found
+        if (error.response?.status === 404) {
+          throw new Error(`User not found. Please check your email or register if you're new.`);
+        }
+        
+        // Return more user-friendly error message
+        if (responseData?.message) {
+          throw new Error(`Login failed: ${responseData.message}`);
+        }
+      }
       throw error;
     }
   },
@@ -108,28 +434,40 @@ export const authService = {
       throw error;
     }
   },
-  resetPassword: async (email: string, userType: 'patient' | 'doctor' | 'staff', newPassword: string) => {
+  resetPassword: async (email: string, userType: 'patient' | 'doctor' | 'staff' | null, newPassword: string) => {
     try {
-      // Determine the endpoint based on user type
-      let endpoint: string;
-
-      switch (userType) {
-        case 'patient':
-          endpoint = '/patients/reset-password';
-          break;
-        case 'doctor':
-          endpoint = '/doctors/reset-password';
-          break;
-        case 'staff':
-          endpoint = '/staff/reset-password';
-          break;
-        default:
-          throw new Error('Invalid user type');
+      // If userType is null, use the unified endpoint
+      if (userType === null) {
+        const { data } = await api.post('/auth/reset-password', { email, newPassword });
+        return data;
+      } else {
+        // Otherwise use the type-specific endpoint (legacy support)
+        let endpoint: string;
+        switch (userType) {
+          case 'patient':
+            endpoint = '/patients/reset-password';
+            break;
+          case 'doctor':
+            endpoint = '/doctors/reset-password';
+            break;
+          case 'staff':
+            endpoint = '/staff/reset-password';
+            break;
+          default:
+            throw new Error('Invalid user type');
+        }
+        const { data } = await api.post(endpoint, { email, newPassword });
+        return data;
       }
-
-      const { data } = await api.post(endpoint, { email, newPassword });
-      return data;
     } catch (error) {
+      // Enhance error logging
+      if (axios.isAxiosError(error)) {
+        console.error('Password reset error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        });
+      }
       throw error;
     }
   },
@@ -318,22 +656,25 @@ export const appointmentService = {
     try {
       console.log(`API: Cancelling appointment ${id}`);
       
-      // Make a dedicated call for cancellation
-      const response = await api.put(`/appointments/${id}/cancel`, { status: 'cancelled' });
+      // First try the dedicated cancellation endpoint
+      const response = await api.put(`/appointments/${id}/cancel`, {});
       console.log(`API: Cancel appointment ${id} success response:`, response.data);
       
       return response.data;
     } catch (error) {
-      console.error(`API: Failed to cancel appointment ${id}:`, error);
+      console.error(`API: Failed to cancel appointment ${id} using dedicated endpoint:`, error);
       
       // Handle errors but attempt a direct update as fallback
       try {
         console.log(`API: Attempting fallback direct update for appointment ${id}`);
-        const fallbackResponse = await api.put(`/appointments/${id}`, { status: 'cancelled' });
+        const fallbackResponse = await api.put(`/appointments/${id}`, { 
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString() 
+        });
         console.log(`API: Fallback success for appointment ${id}:`, fallbackResponse.data);
         return fallbackResponse.data;
       } catch (fallbackError) {
-        console.error(`API: Fallback also failed for appointment ${id}:`, fallbackError);
+        console.error(`API: All cancellation attempts failed for appointment ${id}:`, fallbackError);
         throw fallbackError;
       }
     }
@@ -553,11 +894,19 @@ export const chatService = {
       throw error;
     }
   },
-  getConversationMessages: async (conversationId: string) => {
+  getConversationMessages: async (conversationId: string, userId?: string) => {
     try {
-      const { data } = await api.get(`/chat/conversations/${conversationId}/messages`);
+      if (!userId) {
+        console.warn('User ID not provided for getConversationMessages, using legacy endpoint');
+        const { data } = await api.get(`/chat/conversations/${conversationId}/messages`);
+        return data;
+      }
+
+      console.log(`Fetching messages between user ${userId} and conversation ${conversationId}`);
+      const { data } = await api.get(`/chat/conversations/${conversationId}/messages/${userId}`);
       return data;
     } catch (error) {
+      console.error('Error fetching conversation messages:', error);
       throw error;
     }
   },
@@ -591,29 +940,20 @@ export const chatService = {
     } catch (error) {
       throw error;
     }
-  },
-  subscribeToConversation: (conversationId: string, callback: (event: any) => void) => {
-    // This would use WebSockets in a real implementation
-    // For now, return a mock subscription object
-    console.log(`Subscribing to conversation: ${conversationId}`);
-
-    // Set up the connection to the WebSocket server here
-
+  },  subscribeToConversation: (conversationId: string, callback: (event: any) => void) => {
+    // Mock implementation until WebSocket server is implemented
+    console.log(`Mock WebSocket: Subscribing to conversation: ${conversationId}`);
+    
+    // Return mock subscription with cleanup method
     return {
       unsubscribe: () => {
-        console.log(`Unsubscribing from conversation: ${conversationId}`);
-        // Clean up WebSocket connection here
+        console.log(`Mock WebSocket: Unsubscribing from conversation: ${conversationId}`);
       },
     };
   },
   sendTypingIndicator: (conversationId: string, isTyping: boolean) => {
-    // This would use WebSockets in a real implementation
-    console.log(
-      `Sending typing indicator for conversation ${conversationId}: ${
-        isTyping ? 'typing' : 'stopped typing'
-      }`
-    );
-    // Send typing indicator via WebSocket here
+    // Mock implementation for typing indicator
+    console.log(`Mock WebSocket: User is ${isTyping ? 'typing' : 'not typing'} in conversation ${conversationId}`);
   },
   getUserConversations: async (userId: string, userType: 'patient' | 'doctor') => {
     try {
@@ -653,63 +993,50 @@ export const documentService = {
     } catch (error) {
       throw error;
     }
-  },
-  uploadDocument: async (documentData: any, file?: any) => {
+  },  uploadDocument: async (documentData: any, file?: any) => {
     try {
+      // Handle file uploads with FormData if a file is provided
       if (file) {
-        // If we have a file, use FormData to handle the upload
+        // Validate file object has required properties
+        if (!file.uri || !file.type || !file.name) {
+          throw new Error('Invalid file format: Missing required file properties (uri, type, or name)');
+        }
+        
+        // Create FormData object for multipart/form-data uploads
         const formData = new FormData();
         
-        // Add document metadata
+        // Add all document metadata
         Object.keys(documentData).forEach(key => {
           formData.append(key, documentData[key]);
         });
         
-        // Add the file - ensure it's properly formatted for multer on the backend
-        // The file object must contain: uri, type, and name properties
-        if (typeof file === 'object' && file.uri && file.type && file.name) {
-          formData.append('document', file as any);
-          
-          console.log('Uploading document with FormData:', {
-            metadata: documentData,
-            fileInfo: {
-              name: file.name,
-              type: file.type,
-              uriPreview: file.uri.substring(0, 50) + '...' // Log just part of URI for debugging
-            }
-          });
-        } else {
-          console.error('Invalid file object for upload:', file);
-          throw new Error('Invalid file format');
-        }
+        // Add the file to the form data
+        formData.append('document', file as any);
         
-        // Need to use a different content type for multipart/form-data
+        // Log upload info (but limit URI length in logs)
+        console.log('Uploading document:', {
+          documentType: documentData.document_type || 'unknown',
+          fileName: file.name,
+          fileType: file.type
+        });
+        
+        // Send multipart request with correct content type header
         const { data } = await api.post('/documents', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: {'Content-Type': 'multipart/form-data'},
         });
         return data;
-      } else {
-        // If we just have metadata, proceed with the standard JSON request
-        const { data } = await api.post('/documents', documentData);
-        return data;
-      }
+      } 
+      
+      // For metadata-only uploads, use standard JSON
+      const { data } = await api.post('/documents', documentData);
+      return data;
+      
     } catch (error) {
-      console.error('Error uploading document:', error);
-      if (axios.isAxiosError(error)) {
-        const responseData = error.response?.data;
-        console.error('API Error Details:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: responseData,
-          message: error.message
-        });
-        
-        // Throw with more detailed error message
-        if (responseData?.message) {
-          throw new Error(`Upload failed: ${responseData.message}`);
-        }
+      // Enhanced error reporting
+      console.error('Document upload failed:', error instanceof Error ? error.message : 'Unknown error');
+      
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        throw new Error(`Upload failed: ${error.response.data.message}`);
       }
       throw error;
     }

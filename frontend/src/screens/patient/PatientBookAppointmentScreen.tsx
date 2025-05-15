@@ -20,6 +20,7 @@ interface Doctor {
   specialty: string;
   hospital?: string;
   fee?: number;
+  availability?: Record<string, TimeSlot[]>;
 }
 
 interface Day {
@@ -29,14 +30,16 @@ interface Day {
   dayNum: number;
   month: string;
   available: boolean;
+  dayName: string; // day name for availability lookup (sunday, monday, etc.)
 }
 
 interface TimeSlot {
   id: string;
-  time: string;
+  time?: string; // Formatted time for display
   startTime: string;
   endTime: string;
   available: boolean;
+  isBooked?: boolean;
 }
 
 interface TimeSlots {
@@ -67,6 +70,7 @@ const PatientBookAppointmentScreen = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlots>({ morningSlots: [], afternoonSlots: [] });
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
   const [appointmentType, setAppointmentType] = useState('in-person');
+  const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
   
   // Fetch doctor details from API
   useEffect(() => {
@@ -83,7 +87,7 @@ const PatientBookAppointmentScreen = () => {
   // Fetch available time slots when a day is selected
   useEffect(() => {
     if (selectedDay) {
-      fetchAvailableTimeSlots(selectedDay.date);
+      fetchAvailableTimeSlots(selectedDay.date, selectedDay.dayName);
     }
   }, [selectedDay]);
 
@@ -105,10 +109,18 @@ const PatientBookAppointmentScreen = () => {
   const generateDays = () => {
     const today = new Date();
     const daysArray: Day[] = [];
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     
     for (let i = 0; i < 14; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() + i);
+      const dayIndex = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const dayName = dayNames[dayIndex];
+      
+      // Check if doctor has availability for this day
+      const hasDoctorAvailability = doctor?.availability && 
+                                   doctor.availability[dayName] && 
+                                   doctor.availability[dayName].length > 0;
       
       daysArray.push({
         id: i.toString(),
@@ -116,65 +128,75 @@ const PatientBookAppointmentScreen = () => {
         day: date.toLocaleString('default', { weekday: 'short' }),
         dayNum: date.getDate(),
         month: date.toLocaleString('default', { month: 'short' }),
-        available: true, // Default to available, will check with API
+        available: Boolean(hasDoctorAvailability), // Ensure it's always a boolean
+        dayName: dayName
       });
     }
     
     setDays(daysArray);
-    setSelectedDay(daysArray[0]);
+    
+    // Select the first available day as default
+    const firstAvailableDay = daysArray.find(day => day.available);
+    if (firstAvailableDay) {
+      setSelectedDay(firstAvailableDay);
+    }
   };
   
-  const fetchAvailableTimeSlots = async (date: Date) => {
+  const fetchAvailableTimeSlots = async (date: Date, dayName: string) => {
     try {
       setIsLoading(true);
       
       // Format the date for API call
       const formattedDate = formatDateForAPI(date);
       
-      // Mock API call for time slots until real endpoint is available
-      // In a real implementation, you would call the doctor service API
-      // const availabilityData = await doctorService.getDoctorAvailabilityForDate(doctorId, formattedDate);
+      // Get existing appointments for this doctor on this date
+      const appointmentsForDay = await appointmentService.getAppointmentsByDateRange(
+        formattedDate, 
+        formattedDate
+      );
       
-      // Mock response data for development
-      const mockResponse = {
-        slots: [
-          { id: '1', startTime: '08:00', endTime: '09:00', isBooked: false },
-          { id: '2', startTime: '09:00', endTime: '10:00', isBooked: true },
-          { id: '3', startTime: '10:00', endTime: '11:00', isBooked: false },
-          { id: '4', startTime: '11:00', endTime: '12:00', isBooked: false },
-          { id: '5', startTime: '13:00', endTime: '14:00', isBooked: false },
-          { id: '6', startTime: '14:00', endTime: '15:00', isBooked: true },
-          { id: '7', startTime: '15:00', endTime: '16:00', isBooked: false },
-          { id: '8', startTime: '16:00', endTime: '17:00', isBooked: false },
-        ]
-      };
+      // Filter to appointments for this doctor
+      const doctorAppointments = appointmentsForDay.filter(
+        (apt: any) => apt.doctorId === doctorId || apt.doctor_id === doctorId
+      );
       
-      const availabilityData = mockResponse;
+      setExistingAppointments(doctorAppointments);
       
-      // Separate into morning and afternoon slots
+      // Get the doctor's availability for this day of the week
+      const dayAvailability = doctor?.availability?.[dayName] || [];
+      
+      // Create time slots from doctor's availability for this day
       const morningSlots: TimeSlot[] = [];
       const afternoonSlots: TimeSlot[] = [];
       
-      availabilityData.slots.forEach((slot: any) => {
-        const time = new Date(`${formattedDate}T${slot.startTime}`);
-        const hours = time.getHours();
+      dayAvailability.forEach((slot: any) => {
+        const startTime = slot.startTime;
+        const endTime = slot.endTime;
         
-        // Convert to 12-hour format
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const hours12 = hours % 12 || 12;
-        const minutes = time.getMinutes().toString().padStart(2, '0');
-        const timeString = `${hours12}:${minutes} ${ampm}`;
+        // Convert to standard time format (12-hour with AM/PM)
+        const displayTime = formatTimeForDisplay(startTime);
+        
+        // Check if this slot is already booked
+        const isSlotBooked = doctorAppointments.some((apt: any) => {
+          // Extract time from appointment date_time
+          const aptTime = apt.date_time ? apt.date_time.split('T')[1].substring(0, 5) : apt.time;
+          
+          // Compare with slot start time
+          return aptTime === startTime;
+        });
         
         const slotObject: TimeSlot = {
-          id: slot.id,
-          time: timeString,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          available: !slot.isBooked
+          id: slot.id || `${dayName}-${startTime}`,
+          time: displayTime,
+          startTime: startTime,
+          endTime: endTime,
+          available: !isSlotBooked,
+          isBooked: isSlotBooked
         };
         
         // Split into morning/afternoon based on hour
-        if (hours < 12) {
+        const hour = parseInt(startTime.split(':')[0], 10);
+        if (hour < 12) {
           morningSlots.push(slotObject);
         } else {
           afternoonSlots.push(slotObject);
@@ -198,8 +220,21 @@ const PatientBookAppointmentScreen = () => {
     }
   };
   
+  const formatTimeForDisplay = (timeStr: string): string => {
+    const [hoursStr, minutesStr] = timeStr.split(':');
+    const hours = parseInt(hoursStr, 10);
+    
+    // Convert to 12-hour format
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    
+    return `${hours12}:${minutesStr} ${ampm}`;
+  };
+  
   const handleDaySelection = (day: Day) => {
-    setSelectedDay(day);
+    if (day.available) {
+      setSelectedDay(day);
+    }
   };
   
   const handleTimeSelection = (slot: TimeSlot) => {
@@ -227,11 +262,14 @@ const PatientBookAppointmentScreen = () => {
       const dateTime = `${dateStr}T${timeStr}`;
       
       const appointmentData = {
-        patient_id: user?.id,         // Changed from patientId to patient_id
-        doctor_id: doctorId,          // Changed from doctorId to doctor_id
-        date_time: dateTime,          // Combined date and time into date_time
-        appointment_type: appointmentType, // Updated for consistency (optional field)
-        status: 'scheduled'
+        patient_id: user?.id,
+        doctor_id: doctorId,
+        date_time: dateTime,
+        appointment_type: appointmentType,
+        status: 'scheduled',
+        start_time: selectedTimeSlot.startTime,
+        end_time: selectedTimeSlot.endTime,
+        reason: 'Medical consultation' // Default reason
       };
       
       if (isRescheduling) {
@@ -242,7 +280,10 @@ const PatientBookAppointmentScreen = () => {
           `Your appointment with ${doctor?.name || 'the doctor'} has been rescheduled to ${selectedDay?.month || ''} ${selectedDay?.dayNum || ''} at ${selectedTimeSlot.time}.`,
           [{ 
             text: 'OK', 
-            onPress: () => navigation.navigate('Appointments') 
+            onPress: () => navigation.navigate('Appointments', { 
+              screen: 'PatientAppointments',
+              params: { initialFilter: 'upcoming', refresh: true }
+            }) 
           }]
         );
       } else {
@@ -253,7 +294,10 @@ const PatientBookAppointmentScreen = () => {
           `Your appointment with ${doctor?.name || 'the doctor'} is scheduled for ${selectedDay?.month || ''} ${selectedDay?.dayNum || ''} at ${selectedTimeSlot.time}.`,
           [{ 
             text: 'OK', 
-            onPress: () => navigation.navigate('Appointments') 
+            onPress: () => navigation.navigate('Appointments', { 
+              screen: 'PatientAppointments',
+              params: { initialFilter: 'upcoming', refresh: true }
+            }) 
           }]
         );
       }
@@ -315,116 +359,136 @@ const PatientBookAppointmentScreen = () => {
       {/* Calendar Days */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Select Date</Text>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={styles.daysContainer}
-        >
-          {days.map((day) => (
-            <TouchableOpacity
-              key={day.id}
-              style={[
-                styles.dayItem,
-                selectedDay?.id === day.id && styles.selectedDayItem,
-                !day.available && styles.unavailableDayItem,
-              ]}
-              onPress={() => day.available && handleDaySelection(day)}
-              disabled={!day.available}
-            >
-              <Text style={[
-                styles.dayName,
-                selectedDay?.id === day.id && styles.selectedDayText,
-                !day.available && styles.unavailableDayText,
-              ]}>
-                {day.day}
-              </Text>
-              <Text style={[
-                styles.dayNumber,
-                selectedDay?.id === day.id && styles.selectedDayText,
-                !day.available && styles.unavailableDayText,
-              ]}>
-                {day.dayNum}
-              </Text>
-              <Text style={[
-                styles.monthText,
-                selectedDay?.id === day.id && styles.selectedDayText,
-                !day.available && styles.unavailableDayText,
-              ]}>
-                {day.month}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {days.some(day => day.available) ? (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.daysContainer}
+          >
+            {days.map((day) => (
+              <TouchableOpacity
+                key={day.id}
+                style={[
+                  styles.dayItem,
+                  selectedDay?.id === day.id && styles.selectedDayItem,
+                  !day.available && styles.unavailableDayItem,
+                ]}
+                onPress={() => handleDaySelection(day)}
+                disabled={!day.available}
+              >
+                <Text style={[
+                  styles.dayName,
+                  selectedDay?.id === day.id && styles.selectedDayText,
+                  !day.available && styles.unavailableDayText,
+                ]}>
+                  {day.day}
+                </Text>
+                <Text style={[
+                  styles.dayNumber,
+                  selectedDay?.id === day.id && styles.selectedDayText,
+                  !day.available && styles.unavailableDayText,
+                ]}>
+                  {day.dayNum}
+                </Text>
+                <Text style={[
+                  styles.monthText,
+                  selectedDay?.id === day.id && styles.selectedDayText,
+                  !day.available && styles.unavailableDayText,
+                ]}>
+                  {day.month}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.noDaysAvailableContainer}>
+            <Text style={styles.noDaysAvailableText}>
+              This doctor hasn't set any availability in the next 14 days.
+            </Text>
+          </View>
+        )}
       </View>
       
       {/* Time Slots */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Time</Text>
-        
-        {isLoading ? (
-          <ActivityIndicator size="small" color="#007bff" style={styles.slotLoader} />
-        ) : (
-          <>
-            {/* Morning Slots */}
-            <Text style={styles.timeOfDay}>Morning</Text>
-            <View style={styles.timeSlotContainer}>
-              {timeSlots.morningSlots.length > 0 ? (
-                timeSlots.morningSlots.map((slot) => (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.timeSlot,
-                      selectedTimeSlot?.id === slot.id && styles.selectedTimeSlot,
-                      !slot.available && styles.unavailableTimeSlot,
-                    ]}
-                    onPress={() => handleTimeSelection(slot)}
-                    disabled={!slot.available}
-                  >
-                    <Text style={[
-                      styles.timeSlotText,
-                      selectedTimeSlot?.id === slot.id && styles.selectedTimeText,
-                      !slot.available && styles.unavailableTimeText,
-                    ]}>
-                      {slot.time}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.noSlotsText}>No morning slots available</Text>
-              )}
-            </View>
-            
-            {/* Afternoon Slots */}
-            <Text style={styles.timeOfDay}>Afternoon</Text>
-            <View style={styles.timeSlotContainer}>
-              {timeSlots.afternoonSlots.length > 0 ? (
-                timeSlots.afternoonSlots.map((slot) => (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.timeSlot,
-                      selectedTimeSlot?.id === slot.id && styles.selectedTimeSlot,
-                      !slot.available && styles.unavailableTimeSlot,
-                    ]}
-                    onPress={() => handleTimeSelection(slot)}
-                    disabled={!slot.available}
-                  >
-                    <Text style={[
-                      styles.timeSlotText,
-                      selectedTimeSlot?.id === slot.id && styles.selectedTimeText,
-                      !slot.available && styles.unavailableTimeText,
-                    ]}>
-                      {slot.time}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.noSlotsText}>No afternoon slots available</Text>
-              )}
-            </View>
-          </>
-        )}
-      </View>
+      {selectedDay && selectedDay.available && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Select Time</Text>
+          
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#007bff" style={styles.slotLoader} />
+          ) : (
+            <>
+              {/* Morning Slots */}
+              <Text style={styles.timeOfDay}>Morning</Text>
+              <View style={styles.timeSlotContainer}>
+                {timeSlots.morningSlots.length > 0 ? (
+                  timeSlots.morningSlots.map((slot) => (
+                    <TouchableOpacity
+                      key={slot.id}
+                      style={[
+                        styles.timeSlot,
+                        selectedTimeSlot?.id === slot.id && styles.selectedTimeSlot,
+                        !slot.available && styles.unavailableTimeSlot,
+                      ]}
+                      onPress={() => handleTimeSelection(slot)}
+                      disabled={!slot.available}
+                    >
+                      <Text style={[
+                        styles.timeSlotText,
+                        selectedTimeSlot?.id === slot.id && styles.selectedTimeText,
+                        !slot.available && styles.unavailableTimeText,
+                      ]}>
+                        {slot.time}
+                      </Text>
+                      {!slot.available && (
+                        <View style={styles.bookedIndicator}>
+                          <Text style={styles.bookedText}>Booked</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.noSlotsText}>No morning slots available</Text>
+                )}
+              </View>
+              
+              {/* Afternoon Slots */}
+              <Text style={styles.timeOfDay}>Afternoon</Text>
+              <View style={styles.timeSlotContainer}>
+                {timeSlots.afternoonSlots.length > 0 ? (
+                  timeSlots.afternoonSlots.map((slot) => (
+                    <TouchableOpacity
+                      key={slot.id}
+                      style={[
+                        styles.timeSlot,
+                        selectedTimeSlot?.id === slot.id && styles.selectedTimeSlot,
+                        !slot.available && styles.unavailableTimeSlot,
+                      ]}
+                      onPress={() => handleTimeSelection(slot)}
+                      disabled={!slot.available}
+                    >
+                      <Text style={[
+                        styles.timeSlotText,
+                        selectedTimeSlot?.id === slot.id && styles.selectedTimeText,
+                        !slot.available && styles.unavailableTimeText,
+                      ]}>
+                        {slot.time}
+                      </Text>
+                      {!slot.available && (
+                        <View style={styles.bookedIndicator}>
+                          <Text style={styles.bookedText}>Booked</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.noSlotsText}>No afternoon slots available</Text>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+      )}
       
       {/* Appointment Type */}
       <View style={styles.section}>
@@ -474,9 +538,12 @@ const PatientBookAppointmentScreen = () => {
       
       {/* Confirm Button */}
       <TouchableOpacity 
-        style={styles.confirmButton}
+        style={[
+          styles.confirmButton,
+          (!selectedTimeSlot || !selectedDay?.available) && styles.disabledButton
+        ]}
         onPress={handleConfirmAppointment}
-        disabled={isLoading}
+        disabled={isLoading || !selectedTimeSlot || !selectedDay?.available}
       >
         {isLoading ? (
           <ActivityIndicator size="small" color="#fff" />
@@ -577,6 +644,18 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 16,
   },
+  noDaysAvailableContainer: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    alignItems: 'center', 
+  },
+  noDaysAvailableText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic'
+  },
   daysContainer: {
     paddingBottom: 8,
   },
@@ -642,6 +721,7 @@ const styles = StyleSheet.create({
     borderColor: '#e0f2fe',
     marginRight: 10,
     marginBottom: 10,
+    position: 'relative',
   },
   selectedTimeSlot: {
     backgroundColor: '#007bff',
@@ -661,6 +741,22 @@ const styles = StyleSheet.create({
   },
   unavailableTimeText: {
     color: '#999',
+  },
+  bookedIndicator: {
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 4,
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    transform: [{ rotate: '20deg' }],
+  },
+  bookedText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: 'bold',
   },
   appointmentTypeContainer: {
     flexDirection: 'row',
@@ -698,6 +794,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 24,
     alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#b3d7ff',
   },
   confirmButtonText: {
     color: '#fff',

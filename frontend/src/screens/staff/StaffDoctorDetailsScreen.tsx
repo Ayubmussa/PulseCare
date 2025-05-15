@@ -19,12 +19,13 @@ import { useAuth } from '../../context/AuthContext';
 
 // Define types for route params and navigation
 type RootStackParamList = {
-  DoctorSchedule: { doctorId: string; doctorName: string };
-  DoctorPatients: { doctorId: string; doctorName: string };
-  StaffDoctorDetails: { doctorId: string };
+  ManageDoctors: undefined;
+  DoctorDetails: { doctorId: string };
+  ManagePatients: undefined;
+  PatientDetails: { doctorId: string; doctorName: string };
 };
 
-type StaffDoctorDetailsRouteProp = RouteProp<RootStackParamList, 'StaffDoctorDetails'>;
+type StaffDoctorDetailsRouteProp = RouteProp<RootStackParamList, 'DoctorDetails'>;
 type StaffDoctorDetailsNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Define Doctor interface
@@ -204,17 +205,23 @@ const StaffDoctorDetailsScreen = () => {
   };
 
   const handleViewSchedule = () => {
-    navigation.navigate('DoctorSchedule', { 
-      doctorId: doctor.id,
-      doctorName: doctor.name 
-    });
+    // Since there's no DoctorSchedule screen in StaffNavigator, we'll show an alert for now
+    Alert.alert('Schedule Management', 'Schedule management will be implemented in the next update.');
+    // For a proper implementation, we would navigate to a new screen like this:
+    // navigation.navigate('DoctorSchedule', { 
+    //   doctorId: doctor.id,
+    //   doctorName: doctor.name 
+    // });
   };
   
   const handleViewPatients = () => {
-    navigation.navigate('DoctorPatients', { 
-      doctorId: doctor.id,
-      doctorName: doctor.name 
-    });
+    // Navigating to the ManagePatients screen with filter params
+    navigation.navigate('ManagePatients');
+    // For a more specific implementation:
+    // navigation.navigate('PatientDetails', { 
+    //   doctorId: doctor.id,
+    //   doctorName: doctor.name 
+    // });
   };
 
   if (loading) {

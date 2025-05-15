@@ -85,7 +85,7 @@ const DoctorChatDetailsScreen: React.FC = () => {
   const loadMessages = useCallback(async () => {
     try {
       setIsLoading(true);
-      const messagesData = await chatService.getConversationMessages(conversationId);
+      const messagesData = await chatService.getConversationMessages(conversationId, user?.id);
       setMessages(messagesData);
       
       // Mark messages as read
@@ -213,9 +213,9 @@ const DoctorChatDetailsScreen: React.FC = () => {
   // Navigate to participant profile
   const viewParticipantProfile = () => {
     if (participantType === 'patient') {
-      navigation.navigate('PatientDetails', { patientId: participantId });
+      navigation.navigate('DoctorPatientDetails', { patientId: participantId });
     } else {
-      navigation.navigate('StaffDetails', { staffId: participantId });
+      navigation.navigate('StaffProfile', { staffId: participantId });
     }
   };
 

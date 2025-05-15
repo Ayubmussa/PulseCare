@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { patientService } from '../../services/api';
@@ -18,10 +19,8 @@ interface PatientProfile {
   profileImage?: string;
 }
 
-// Define navigation type
-type NavigationProp = {
-  navigate: (screen: string, params?: any) => void;
-};
+// Define navigation type using NativeStackNavigationProp for proper typing
+type NavigationProp = NativeStackNavigationProp<any>;
 
 const PatientProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();

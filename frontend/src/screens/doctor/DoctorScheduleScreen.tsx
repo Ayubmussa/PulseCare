@@ -29,6 +29,8 @@ interface TimeSlot {
   appointmentId?: string;
   patientName?: string;
   reason?: string;
+  status?: 'available' | 'booked' | 'pending' | 'cancelled';
+  bookingType?: string; // Regular, Emergency, Follow-up, etc.
 }
 
 const DoctorScheduleScreen: React.FC = () => {
@@ -137,7 +139,11 @@ const DoctorScheduleScreen: React.FC = () => {
   };
 
   const navigateToAppointmentDetails = (appointmentId: string) => {
-    navigation.navigate('AppointmentDetails', { id: appointmentId });
+    // Navigate to the Appointments tab first, then to the specific appointment details
+    navigation.navigate('Appointments', { 
+      screen: 'AppointmentDetails',
+      params: { id: appointmentId }
+    });
   };
 
   const navigateToAddSchedule = () => {

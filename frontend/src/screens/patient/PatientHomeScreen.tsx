@@ -109,12 +109,18 @@ const PatientHomeScreen: React.FC = () => {
 
   // Navigate to appointment details
   const navigateToAppointmentDetails = (appointmentId: string) => {
-    navigation.navigate('AppointmentDetails', { id: appointmentId });
+    navigation.navigate('Appointments', {
+      screen: 'AppointmentDetails',
+      params: { id: appointmentId }
+    });
   };
 
   // Navigate to doctor details
   const navigateToDoctorDetails = (doctorId: string) => {
-    navigation.navigate('ViewDoctor', { doctorId });
+    navigation.navigate('Doctors', {
+      screen: 'ViewDoctor',
+      params: { doctorId }
+    });
   };
 
   // Navigate to quick access service
@@ -140,9 +146,9 @@ const PatientHomeScreen: React.FC = () => {
 
   // Navigate to book appointment
   const navigateToBookAppointment = () => {
-    // Navigate to the book appointment screen in the Appointments stack
-    navigation.navigate('Appointments', { 
-      screen: 'BookAppointment' 
+    // Navigate to the Doctors tab first to allow doctor selection
+    navigation.navigate('Doctors', { 
+      screen: 'DoctorsList'
     });
   };
 

@@ -15,16 +15,21 @@ interface Doctor {
   id: string;
   name: string;
   specialty: string;
-  image?: string;
-  rating?: number;
+  rating: number;
+  experience: string;
+  education: string;
+  about: string;
+  image: string;
+  availability: DoctorAvailabilitySlot[];
+  phone?: string;
+  email?: string;
+  location?: string;
+  acceptingNewPatients: boolean;
+  // Add missing properties
   reviews?: number;
   hospital?: string;
-  about?: string;
-  experience?: string;
-  education?: string;
   languages?: string[];
   address?: string;
-  availability?: DoctorAvailabilitySlot[];
 }
 
 // Define route param types
@@ -72,23 +77,17 @@ const PatientViewDoctorScreen = () => {
 
   const navigateToBookAppointment = () => {
     if (doctor) {
-      // Handle different navigation paths based on where we came from
-      const currentRoute = navigation.getState().routes[navigation.getState().index];
-      const parentScreen = currentRoute?.name;
-      
-      if (parentScreen === 'ViewDoctor' && navigation.canGoBack()) {
-        // If we're in the Doctors stack
-        navigation.navigate('BookAppointment', { doctorId: doctor.id });
-      } else {
-        // Coming from Home or another tab - use nested navigation
-        navigation.navigate('BookAppointment', { doctorId: doctor.id });
-      }
+      // Use the parent navigator pattern instead of trying to determine the current route
+      // This ensures consistent navigation whether coming from Doctors tab or Home screen
+      navigation.navigate('BookAppointment', { doctorId: doctor.id });
     }
   };
 
   const handleStartChat = () => {
     if (doctor) {
-      // Using a more general navigation approach that works with nested navigators
+      // The correct way to navigate between tab navigators
+      // Access the parent navigator to switch to the Chat tab
+      // and then navigate to the ChatDetails screen within that tab
       navigation.getParent()?.navigate('Chat', {
         screen: 'ChatDetails',
         params: { 

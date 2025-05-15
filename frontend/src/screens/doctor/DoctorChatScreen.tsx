@@ -131,8 +131,11 @@ const DoctorChatScreen: React.FC = () => {
   };
 
   const startNewChat = () => {
-    // Navigate to PatientList screen with a flag indicating we want to start a new chat
-    navigation.navigate('PatientList', { action: 'newChat' });
+    // Navigate to PatientList screen in Patients tab with a flag indicating we want to start a new chat
+    navigation.getParent()?.navigate('Patients', { 
+      screen: 'PatientList', 
+      params: { action: 'newChat' }
+    });
   };
 
   const renderConversationItem = ({ item }: { item: ChatConversation }) => {

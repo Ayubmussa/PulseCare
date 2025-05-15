@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentService } from '../../services/api';
@@ -254,7 +254,7 @@ const PatientAppointmentsScreen: React.FC = () => {
     try {
       console.log(`Directly cancelling appointment ${appointmentId}`);
       
-      // Use the new specialized cancelAppointment function
+      // Use the dedicated cancelAppointment function for more reliability
       const response = await appointmentService.cancelAppointment(appointmentId);
       console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
       
@@ -335,7 +335,14 @@ const PatientAppointmentsScreen: React.FC = () => {
     if (!selectedAppointment) return;
     
     setModalVisible(false);
-    navigation.navigate('RescheduleAppointment', { appointment: selectedAppointment });
+    // Navigate to BookAppointment screen with the appointment data
+    navigation.navigate('Doctors', {
+      screen: 'BookAppointment',
+      params: {
+        doctorId: selectedAppointment.doctorId,
+        rescheduleAppointmentId: selectedAppointment.id
+      }
+    });
   };
 
   const navigateToAppointmentDetails = (appointment: Appointment) => {
@@ -343,11 +350,16 @@ const PatientAppointmentsScreen: React.FC = () => {
   };
 
   const navigateToBookAppointment = () => {
-    // Navigate to the Doctors tab first, then to the BookAppointment screen
-    navigation.navigate('Doctors', {
-      screen: 'DoctorsList',
-      // After showing the doctors list, user can select a doctor to book with
-    });
+    // Navigate to the Doctors tab first, then to the DoctorsList screen
+    // This ensures proper navigation when changing tabs
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Doctors',
+        params: {
+          screen: 'DoctorsList'
+        }
+      })
+    );
   };
 
   const showAppointmentOptions = (appointment: Appointment) => {

@@ -262,92 +262,6 @@ const getDoctorById = async (req, res) => {
   }
 };
 
-// Get pending doctor registrations
-const getDoctorRegistrations = async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('doctors')
-      .select('*')
-      .eq('status', 'pending');
-    
-    if (error) throw error;
-    
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Approve a doctor registration
-const approveDoctor = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { staffId, comments } = req.body;
-    
-    // Update doctor status to approved
-    const { data, error } = await supabase
-      .from('doctors')
-      .update({
-        status: 'active',
-        approved_by: staffId,
-        approval_date: new Date().toISOString(),
-        approval_comments: comments
-      })
-      .eq('id', id)
-      .select();
-    
-    if (error) throw error;
-    
-    if (data.length === 0) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    // TODO: Send approval notification to doctor (email, in-app notification, etc.)
-    
-    res.status(200).json({
-      message: 'Doctor approved successfully',
-      doctor: data[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Reject a doctor registration
-const rejectDoctor = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { staffId, reason } = req.body;
-    
-    // Update doctor status to rejected
-    const { data, error } = await supabase
-      .from('doctors')
-      .update({
-        status: 'rejected',
-        rejected_by: staffId,
-        rejection_date: new Date().toISOString(),
-        rejection_reason: reason
-      })
-      .eq('id', id)
-      .select();
-    
-    if (error) throw error;
-    
-    if (data.length === 0) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    // TODO: Send rejection notification to doctor (email, in-app notification, etc.)
-    
-    res.status(200).json({
-      message: 'Doctor registration rejected',
-      doctor: data[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
 // Update doctor status (active/inactive)
 const updateDoctorStatus = async (req, res) => {
   try {
@@ -529,98 +443,6 @@ const updateAppointmentStatus = async (req, res) => {
   }
 };
 
-// CLINIC MANAGEMENT METHODS
-
-// Get clinic information
-const getClinicInfo = async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('clinic')
-      .select('*')
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error;
-    
-    if (!data) {
-      return res.status(404).json({ message: 'Clinic information not found' });
-    }
-    
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Update clinic information
-const updateClinicInfo = async (req, res) => {
-  try {
-    const {
-      name,
-      address,
-      phone,
-      email,
-      website,
-      operatingHours,
-      description,
-      staffId
-    } = req.body;
-    
-    // Check if clinic entry exists
-    const { data: existingClinic, error: fetchError } = await supabase
-      .from('clinic')
-      .select('id')
-      .single();
-    
-    if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
-    
-    let result;
-    
-    if (!existingClinic) {
-      // Insert new clinic info
-      result = await supabase
-        .from('clinic')
-        .insert([{
-          name,
-          address,
-          phone,
-          email,
-          website,
-          operating_hours: operatingHours,
-          description,
-          updated_by: staffId,
-          updated_at: new Date().toISOString()
-        }])
-        .select();
-    } else {
-      // Update existing clinic info
-      result = await supabase
-        .from('clinic')
-        .update({
-          name,
-          address,
-          phone,
-          email,
-          website,
-          operating_hours: operatingHours,
-          description,
-          updated_by: staffId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingClinic.id)
-        .select();
-    }
-    
-    if (result.error) throw result.error;
-    
-    res.status(200).json({
-      message: 'Clinic information updated successfully',
-      clinic: result.data[0]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
 module.exports = {
   getAllStaffMembers,
   getStaffById,
@@ -632,9 +454,6 @@ module.exports = {
   // Healthcare professional management
   getAllDoctors,
   getDoctorById,
-  getDoctorRegistrations,
-  approveDoctor,
-  rejectDoctor,
   updateDoctorStatus,
   // Patient management
   getAllPatients,
@@ -642,8 +461,5 @@ module.exports = {
   // Appointment management
   getStaffAppointments,
   getAppointmentById,
-  updateAppointmentStatus,
-  // Clinic management
-  getClinicInfo,
-  updateClinicInfo
+  updateAppointmentStatus
 };

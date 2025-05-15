@@ -152,9 +152,46 @@ const getDoctorPatients = async (req, res) => {
 
 // Update doctor availability
 const updateAvailability = async (req, res) => {
-  // This would typically integrate with a separate availability table
-  // For now, we'll return a placeholder response
-  res.status(501).json({ message: 'Availability management to be implemented' });
+  try {
+    const { id } = req.params;
+    const { availability } = req.body;
+    
+    // Basic validation
+    if (!id) {
+      return res.status(400).json({ message: 'Doctor ID is required' });
+    }
+    
+    if (!availability || typeof availability !== 'object') {
+      return res.status(400).json({ message: 'Availability data is required and must be an object' });
+    }
+    
+    // Check if doctor exists
+    const { data: doctor, error: findError } = await supabase
+      .from('doctors')
+      .select('id')
+      .eq('id', id)
+      .single();
+    
+    if (findError) throw findError;
+    
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+    
+    // Update the doctor with the new availability
+    const { data, error } = await supabase
+      .from('doctors')
+      .update({ availability })
+      .eq('id', id)
+      .select();
+    
+    if (error) throw error;
+    
+    res.status(200).json(data[0]);
+  } catch (error) {
+    console.error('Error updating doctor availability:', error);
+    res.status(500).json({ error: error.message });
+  }
 };
 
 // Login doctor

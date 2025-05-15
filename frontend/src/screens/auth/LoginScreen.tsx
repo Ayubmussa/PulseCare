@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
+
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -148,12 +149,13 @@ const LoginScreen: React.FC = () => {
               <Text style={styles.registerLink}> Register</Text>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.infoTextContainer}>
+            <View style={styles.infoTextContainer}>
             <Text style={styles.infoText}>
               Note: Registration is only available for patients. Doctor and staff accounts are managed by clinic administrators.
             </Text>
           </View>
+          
+          
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

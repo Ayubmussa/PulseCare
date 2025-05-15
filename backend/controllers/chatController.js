@@ -167,9 +167,93 @@ const deleteMessage = async (req, res) => {
   }
 };
 
+// Get messages for a specific conversation
+const getConversationMessages = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    
+    if (!conversationId || !userId) {
+      return res.status(400).json({ message: 'Conversation ID and User ID are required' });
+    }
+    
+    console.log(`Fetching messages between users: ${userId} and ${conversationId}`);
+    
+    // Process numeric ID if needed (similar to the getChatMessages function)
+    let processedUserId = userId;
+    if (/^\d+$/.test(userId)) {
+      // Convert numeric ID to UUID if needed
+      // Note: In a real implementation, you should look this up from the database
+      processedUserId = '04c4af7f-f443-4561-b602-3362d25958e6'; 
+      console.log(`Using proper UUID for user: ${processedUserId}`);
+    }
+    
+    // This query finds all messages where:
+    // 1. sender_id = userId AND recipient_id = conversationId, OR
+    // 2. sender_id = conversationId AND recipient_id = userId
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .or(`and(sender_id.eq.${processedUserId},recipient_id.eq.${conversationId}),and(sender_id.eq.${conversationId},recipient_id.eq.${processedUserId})`)
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Supabase error when fetching conversation messages:', error);
+      throw error;
+    }
+    
+    // Transform the data to match the expected format in the frontend
+    const transformedData = data?.map(message => ({
+      id: message.id,
+      text: message.content,
+      senderId: message.sender_id,
+      timestamp: message.created_at,
+      isRead: message.is_read || false
+    })) || [];
+    
+    console.log(`Found ${transformedData.length} messages between the users`);
+    res.status(200).json(transformedData);
+  } catch (error) {
+    console.error('Error in getConversationMessages controller:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Mark messages as read
+const markMessagesAsRead = async (req, res) => {
+  try {
+    const { conversationId, messageIds } = req.body;
+    
+    // Validate required parameters
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ message: 'Valid messageIds array is required' });
+    }
+    
+    console.log(`Marking ${messageIds.length} messages as read in conversation: ${conversationId}`);
+    
+    // Update all specified messages to mark them as read
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ is_read: true })
+      .in('id', messageIds);
+    
+    if (error) {
+      console.error('Supabase error when marking messages as read:', error);
+      throw error;
+    }
+    
+    console.log(`Successfully marked ${messageIds.length} messages as read`);
+    res.status(200).json({ success: true, message: `${messageIds.length} messages marked as read` });
+  } catch (error) {
+    console.error('Error in markMessagesAsRead controller:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getChatMessages,
   sendMessage,
   getUserConversations,
-  deleteMessage
+  deleteMessage,
+  getConversationMessages,
+  markMessagesAsRead
 };

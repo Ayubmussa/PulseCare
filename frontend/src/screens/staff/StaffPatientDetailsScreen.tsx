@@ -218,13 +218,21 @@ const StaffPatientDetailsScreen: React.FC = () => {
 
   const handleViewMedicalRecords = (): void => {
     if (patient) {
-      navigation.navigate('MedicalRecords', { patientId, patientName: patient.name });
+      // Navigate to MedicalRecords screen with the required parameters
+      navigation.navigate('MedicalRecords', {
+        patientId, 
+        patientName: patient.name
+      });
     }
   };
   
   const handleScheduleAppointment = (): void => {
     if (patient) {
-      navigation.navigate('ScheduleAppointment', { patientId, patientName: patient.name });
+      // Navigate to ScheduleAppointment screen with the required parameters
+      navigation.navigate('ScheduleAppointment', {
+        patientId, 
+        patientName: patient.name
+      });
     }
   };
 

@@ -77,7 +77,7 @@ const createAppointment = async (req, res) => {
 const updateAppointment = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
     
     // Add detailed logging for debugging
     console.log(`Updating appointment ID: ${id}`);
@@ -88,11 +88,78 @@ const updateAppointment = async (req, res) => {
       return res.status(400).json({ message: 'No update data provided' });
     }
     
-    // Special logging for cancellation
-    if (updateData.status === 'cancelled') {
-      console.log(`🚨 CANCELLATION REQUEST for appointment ${id}`);
+    // Format the date_time field if it exists but doesn't have seconds
+    if (updateData.date_time && !updateData.date_time.endsWith('Z')) {
+      // Check if it's missing seconds
+      if (updateData.date_time.split(':').length < 3) {
+        updateData.date_time += ':00';
+      }
+      
+      // Try to convert to a valid ISO 8601 format with timezone
+      try {
+        const date = new Date(updateData.date_time);
+        updateData.date_time = date.toISOString();
+        console.log('Formatted date_time:', updateData.date_time);
+      } catch (error) {
+        console.error('Error formatting date_time:', error);
+        return res.status(400).json({ 
+          message: 'Invalid date_time format. Please use ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ)' 
+        });
+      }
     }
     
+    // Special handling for cancellation
+    if (updateData.status === 'cancelled') {
+      console.log(`🚨 CANCELLATION REQUEST for appointment ${id} via general update endpoint`);
+      
+      // Extract cancelled_at to handle separately if needed
+      const cancelled_at = updateData.cancelled_at || new Date().toISOString();
+      delete updateData.cancelled_at; // Remove from update data initially
+      
+      // First update just the status
+      const { data: statusData, error: statusError } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', id)
+        .select();
+      
+      if (statusError) {
+        console.error('Error updating appointment status:', statusError);
+        return res.status(500).json({ 
+          error: statusError.message,
+          details: 'Failed to update appointment status to cancelled'
+        });
+      }
+      
+      if (!statusData || statusData.length === 0) {
+        console.log(`No appointment found with ID: ${id}`);
+        return res.status(404).json({ message: 'Appointment not found' });
+      }
+      
+      // Then try to update the cancelled_at timestamp separately
+      try {
+        console.log(`Attempting to set cancelled_at to: ${cancelled_at}`);
+        const { error: timestampError } = await supabase
+          .from('appointments')
+          .update({ cancelled_at: cancelled_at })
+          .eq('id', id);
+        
+        if (timestampError) {
+          console.warn(`Warning: Could not set cancelled_at timestamp: ${timestampError.message}`);
+          // Continue because the status was still updated successfully
+        } else {
+          console.log(`Successfully set cancelled_at timestamp to ${cancelled_at}`);
+        }
+      } catch (timestampError) {
+        console.warn(`Warning: Error setting cancelled_at timestamp: ${timestampError.message}`);
+        // Continue because the status was still updated successfully
+      }
+      
+      console.log(`✅ APPOINTMENT ${id} SUCCESSFULLY CANCELLED via update endpoint`);
+      return res.status(200).json(statusData[0]);
+    }
+    
+    // Normal update for non-cancellation cases
     const { data, error } = await supabase
       .from('appointments')
       .update(updateData)
@@ -104,17 +171,12 @@ const updateAppointment = async (req, res) => {
       throw error;
     }
     
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
       console.log(`No appointment found with ID: ${id}`);
       return res.status(404).json({ message: 'Appointment not found' });
     }
     
     console.log('Appointment updated successfully:', JSON.stringify(data[0], null, 2));
-    
-    // Log successful cancellation
-    if (updateData.status === 'cancelled') {
-      console.log(`✅ APPOINTMENT ${id} SUCCESSFULLY CANCELLED`);
-    }
     
     res.status(200).json(data[0]);
   } catch (error) {
@@ -196,16 +258,24 @@ const cancelAppointment = async (req, res) => {
     
     console.log(`🔴 CANCELLATION REQUEST received for appointment ${id}`);
     
+    if (!id || typeof id !== 'string') {
+      console.error('Invalid appointment ID format:', id);
+      return res.status(400).json({ message: 'Invalid appointment ID format' });
+    }
+    
     // Try to find the appointment first
     const { data: existingAppointment, error: findError } = await supabase
       .from('appointments')
-      .select()
+      .select('*')
       .eq('id', id)
       .single();
     
     if (findError) {
       console.error('Error finding appointment to cancel:', findError);
-      throw findError;
+      return res.status(500).json({ 
+        message: 'Error finding appointment', 
+        error: findError.message 
+      });
     }
     
     if (!existingAppointment) {
@@ -213,26 +283,62 @@ const cancelAppointment = async (req, res) => {
       return res.status(404).json({ message: 'Appointment not found' });
     }
     
+    // Check if appointment is already cancelled
+    if (existingAppointment.status === 'cancelled') {
+      console.log(`Appointment ${id} is already cancelled`);
+      return res.status(200).json({
+        message: 'Appointment is already cancelled',
+        appointment: existingAppointment
+      });
+    }
+    
     console.log(`Found appointment to cancel:`, existingAppointment);
     
     // Update the appointment status to cancelled
+    const cancelled_at = new Date().toISOString();
+    console.log(`Setting cancelled_at to: ${cancelled_at}`);
+    
+    // Do a simple update first with just the status change
     const { data, error } = await supabase
       .from('appointments')
       .update({ 
-        status: 'cancelled',
-        cancelled_at: new Date().toISOString()
+        status: 'cancelled'
       })
       .eq('id', id)
       .select();
     
     if (error) {
-      console.error('Error cancelling appointment:', error);
-      throw error;
+      console.error('Error cancelling appointment (status only):', error);
+      return res.status(500).json({ 
+        message: 'Failed to cancel appointment', 
+        error: error.message,
+        details: error
+      });
     }
     
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
       console.log(`No appointment found with ID: ${id} for cancellation (after update)`);
-      return res.status(404).json({ message: 'Appointment not found' });
+      return res.status(404).json({ message: 'Appointment not found after update attempt' });
+    }
+    
+    // Now try to update the cancelled_at field separately
+    try {
+      const { error: timestampError } = await supabase
+        .from('appointments')
+        .update({ 
+          cancelled_at: cancelled_at 
+        })
+        .eq('id', id);
+      
+      if (timestampError) {
+        console.warn(`Warning: Could not set cancelled_at timestamp: ${timestampError.message}`);
+        // Continue because the status was still updated successfully
+      } else {
+        console.log(`Successfully set cancelled_at timestamp to ${cancelled_at}`);
+      }
+    } catch (timestampError) {
+      console.warn(`Warning: Error setting cancelled_at timestamp: ${timestampError.message}`);
+      // Continue because the status was still updated successfully
     }
     
     console.log(`✅ APPOINTMENT ${id} SUCCESSFULLY CANCELLED:`, data[0]);
@@ -243,7 +349,11 @@ const cancelAppointment = async (req, res) => {
     });
   } catch (error) {
     console.error('Error cancelling appointment:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      message: 'Unexpected error during cancellation',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 

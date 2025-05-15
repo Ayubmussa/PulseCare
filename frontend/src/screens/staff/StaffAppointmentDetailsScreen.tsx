@@ -24,8 +24,17 @@ type StaffAppointmentDetailsRouteParams = {
 
 // Define the type for navigation
 type StaffNavigationProps = {
-  DoctorDetails: { doctorId: string; doctorName: string };
-  PatientDetails: { patientId: string; patientName: string };
+  StaffHome: undefined;
+  StaffManageAppointments: undefined;
+  StaffAppointmentDetails: { appointmentId: string };
+  StaffManageDoctors: undefined;
+  StaffDoctorDetails: { doctorId: string; doctorName?: string };
+  StaffManagePatients: undefined;
+  StaffPatientDetails: { patientId: string; patientName?: string };
+  StaffProfile: undefined;
+  // Maintain backwards compatibility for nested navigators
+  Doctors: { screen: string; params: { doctorId: string; doctorName: string } };
+  Patients: { screen: string; params: { patientId: string; patientName: string } };
 };
 
 // Define the type for appointment data
@@ -101,10 +110,23 @@ const StaffAppointmentDetailsScreen = () => {
     
     if (!appointment) return;
     
-    navigation.navigate('DoctorDetails', { 
-      doctorId: appointment.doctorId, 
-      doctorName: appointment.doctorName 
-    });
+    try {
+      // Try direct navigation to StaffDoctorDetails first
+      navigation.navigate('StaffDoctorDetails', { 
+        doctorId: appointment.doctorId, 
+        doctorName: appointment.doctorName 
+      });
+    } catch (error) {
+      console.warn('Direct navigation failed, trying nested navigation', error);
+      // Fall back to nested navigation pattern if direct navigation fails
+      navigation.navigate('Doctors', { 
+        screen: 'DoctorDetails', 
+        params: { 
+          doctorId: appointment.doctorId, 
+          doctorName: appointment.doctorName 
+        }
+      });
+    }
   };
 
   const navigateToPatientDetails = () => {
@@ -115,10 +137,23 @@ const StaffAppointmentDetailsScreen = () => {
     
     if (!appointment) return;
     
-    navigation.navigate('PatientDetails', { 
-      patientId: appointment.patientId, 
-      patientName: appointment.patientName 
-    });
+    try {
+      // Try direct navigation to StaffPatientDetails first
+      navigation.navigate('StaffPatientDetails', { 
+        patientId: appointment.patientId, 
+        patientName: appointment.patientName 
+      });
+    } catch (error) {
+      console.warn('Direct navigation failed, trying nested navigation', error);
+      // Fall back to nested navigation pattern if direct navigation fails
+      navigation.navigate('Patients', { 
+        screen: 'PatientDetails', 
+        params: { 
+          patientId: appointment.patientId, 
+          patientName: appointment.patientName 
+        }
+      });
+    }
   };
 
   const handleEditAppointment = () => {
@@ -229,30 +264,37 @@ const StaffAppointmentDetailsScreen = () => {
         Alert.alert('Error', 'User information is missing. Please log in again.');
         return false;
       }
-      
-      // Use staffService's updateAppointmentStatus instead, as cancelAppointment doesn't exist
-      const response = await staffService.updateAppointmentStatus(
-        appointmentId,
-        'cancelled',
-        user.id,
-        'Cancelled by staff member'
-      );
-      
-      console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
+
+      // First, try to use the dedicated cancelAppointment function
+      try {
+        const response = await appointmentService.cancelAppointment(appointmentId);
+        console.log('Cancellation API Response:', JSON.stringify(response, null, 2));
+      } catch (cancelError) {
+        // If the dedicated endpoint fails, fall back to staff update method
+        console.log('Dedicated cancelAppointment failed, trying staffService:', cancelError);
+        await staffService.updateAppointmentStatus(
+          appointmentId,
+          'cancelled',
+          user.id,
+          'Cancelled by staff member'
+        );
+      }
       
       // Update local state
-      setAppointment(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
+      if (appointment) {
+        setAppointment({
+          ...appointment,
           status: 'cancelled',
-          lastUpdated: new Date().toISOString().split('T')[0]
-        };
-      });
+          lastUpdated: new Date().toISOString()
+        });
+      }
+      
+      // Refresh appointment data
+      await fetchAppointmentDetails();
       
       return true;
     } catch (error) {
-      console.error('Direct cancellation failed:', error);
+      console.error('All cancellation attempts failed:', error);
       return false;
     }
   };

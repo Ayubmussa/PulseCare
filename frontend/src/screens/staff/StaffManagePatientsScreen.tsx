@@ -210,11 +210,15 @@ const StaffManagePatientsScreen = () => {
   };
   
   const navigateToPatientDetails = (patientId: string, patientName: string) => {
-    navigation.navigate('StaffPatientDetails', { patientId, patientName });
+    navigation.navigate('PatientDetails', { patientId, patientName });
   };
   
   const handleAddNewPatient = () => {
-    navigation.navigate('AddPatient');
+    Alert.alert(
+      "Feature Coming Soon",
+      "The ability to add new patients will be available in a future update.",
+      [{ text: "OK" }]
+    );
   };
   
   const formatDate = (dateString: string | null | undefined) => {

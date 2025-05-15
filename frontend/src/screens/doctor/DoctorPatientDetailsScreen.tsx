@@ -127,17 +127,32 @@ const DoctorPatientDetailsScreen: React.FC = () => {
   };
 
   const navigateToMedicalRecord = (recordId: string) => {
-    navigation.navigate('MedicalRecord', { id: recordId, patientId: actualPatientId, patientName });
+    // Navigate to MedicalRecord using the correct screen name as defined in DoctorNavigator
+    navigation.navigate('MedicalRecord', { 
+      id: recordId, 
+      patientId: actualPatientId, 
+      patientName 
+    });
   };
 
   const navigateToAppointmentDetails = (appointmentId: string) => {
-    navigation.navigate('AppointmentDetails', { id: appointmentId });
+    // Use the parent navigator to ensure we're in the Appointments tab
+    navigation.navigate('Appointments', {
+      screen: 'AppointmentDetails',
+      params: { id: appointmentId }
+    });
   };
 
   const sendMessage = () => {
+    // Navigate to the Chat tab and open a conversation with this patient
     navigation.getParent()?.navigate('Chat', { 
-      screen: 'ChatDetails', 
-      params: { patientId: actualPatientId, patientName }
+      screen: 'ChatDetails',  // Using the correct screen name as defined in DoctorNavigator
+      params: {
+        participantId: actualPatientId,
+        participantName: patientName,
+        participantType: 'patient',
+        isNewChat: true
+      }
     });
   };
 
@@ -193,7 +208,7 @@ const DoctorPatientDetailsScreen: React.FC = () => {
           
           <TouchableOpacity 
             style={[styles.actionButton, styles.primaryButton]}
-            onPress={() => navigation.navigate('AppointmentBooking', { patientId: actualPatientId })}
+            onPress={() => navigation.navigate('Schedule', { patientId: actualPatientId })}
           >
             <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
             <Text style={styles.primaryActionText}>Schedule</Text>
@@ -385,7 +400,7 @@ const DoctorPatientDetailsScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Appointments</Text>
             <TouchableOpacity 
               style={styles.addButton}
-              onPress={() => navigation.navigate('AppointmentBooking', { patientId: actualPatientId })}
+              onPress={() => navigation.navigate('Schedule', { patientId: actualPatientId })}
             >
               <Ionicons name="add" size={20} color="#ffffff" />
               <Text style={styles.addButtonText}>Schedule</Text>

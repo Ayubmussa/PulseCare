@@ -150,17 +150,16 @@ const StaffHomeScreen = () => {
     navigation.navigate('ManageDoctors');
   };
 
-  const navigateToClinicInfo = () => {
-    navigation.navigate('ClinicInfo');
-  };
-
   const navigateToAppointmentDetails = (appointmentId: string) => {
     // Updated to support both parameter naming conventions
     navigation.navigate('AppointmentDetails', { appointmentId, id: appointmentId });
   };
 
   const navigateToPatientDetails = (patientId: string, patientName: string) => {
-    navigation.navigate('PatientDetails', { patientId, patientName });
+    navigation.navigate('Patients', { 
+      screen: 'PatientDetails', 
+      params: { patientId, patientName } 
+    });
   };
 
   const getStatusColor = (status: string): string => {
@@ -323,17 +322,6 @@ const StaffHomeScreen = () => {
             </View>
             <Text style={styles.actionText}>Patients</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            key="action-clinic-info"
-            style={styles.actionButton}
-            onPress={navigateToClinicInfo}
-          >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#fff0e8' }]}>
-              <Ionicons name="business" size={20} color="#fd7e14" />
-            </View>
-            <Text style={styles.actionText}>Clinic Info</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -416,24 +404,6 @@ const StaffHomeScreen = () => {
           </View>
         )}
       </View>
-
-      {/* Clinic Information */}
-      <TouchableOpacity 
-        key="clinic-info-card"
-        style={styles.clinicInfoCard}
-        onPress={navigateToClinicInfo}
-      >
-        <View style={styles.clinicInfoContent}>
-          <Ionicons name="information-circle" size={24} color="#007bff" />
-          <View style={styles.clinicInfoText}>
-            <Text style={styles.clinicInfoTitle}>Clinic Information</Text>
-            <Text style={styles.clinicInfoSubtitle}>
-              View and manage clinic details, hours, staff, and more
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#007bff" />
-        </View>
-      </TouchableOpacity>
 
       {/* Bottom space */}
       <View style={styles.bottomSpace} />
@@ -650,36 +620,6 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   patientStatus: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  clinicInfoCard: {
-    backgroundColor: '#f0f7ff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  clinicInfoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  clinicInfoText: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  clinicInfoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  clinicInfoSubtitle: {
     fontSize: 12,
     color: '#666',
     marginTop: 2,

@@ -194,7 +194,8 @@ const StaffManageAppointmentsScreen: React.FC = () => {
 
   // Navigate to appointment details screen
   const navigateToAppointmentDetails = (appointmentId: string) => {
-    navigation.navigate('StaffAppointmentDetails', { id: appointmentId });
+    // Navigating with the correct route structure to AppointmentDetails screen
+    navigation.navigate('AppointmentDetails', { appointmentId });
   };
 
   // Handle appointment status update
@@ -429,7 +430,15 @@ const StaffManageAppointmentsScreen: React.FC = () => {
       {/* Add Appointment Button */}
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => navigation.navigate('ScheduleAppointment')}
+        onPress={() => {
+          Alert.alert(
+            "Feature Coming Soon",
+            "The ability to schedule appointments will be available in a future update.",
+            [{ text: "OK" }]
+          );
+          // Uncomment when ScheduleAppointment screen is created in the navigator
+          // navigation.navigate('ScheduleAppointment');
+        }}
       >
         <Ionicons name="add" size={24} color="#fff" />
       </TouchableOpacity>

@@ -11,6 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { chatService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -27,8 +28,8 @@ interface Conversation {
   unread: number;
 }
 
-// Define navigation type
-type NavigationProp = any; // Replace with your proper navigation type if available
+// Define navigation type using NativeStackNavigationProp for proper typing
+type NavigationProp = NativeStackNavigationProp<any>;
 
 const PatientChatScreen = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -61,10 +62,14 @@ const PatientChatScreen = () => {
   };
 
   const navigateToChatDetails = (conversation: Conversation) => {
-    navigation.navigate('ChatDetails', {
-      conversationId: conversation.id,
-      doctorId: conversation.doctorId,
-      doctorName: conversation.doctorName
+    // Use navigation.navigate with nested screen params to ensure it works from any context
+    navigation.navigate('Chat', {
+      screen: 'ChatDetails',
+      params: {
+        conversationId: conversation.id,
+        doctorId: conversation.doctorId,
+        doctorName: conversation.doctorName
+      }
     });
   };
 

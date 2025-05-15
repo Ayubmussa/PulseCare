@@ -9,7 +9,7 @@ import {
   RefreshControl,
   SafeAreaView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -64,6 +64,22 @@ const DoctorAppointmentsScreen: React.FC = () => {
 
   const navigateToAppointmentDetails = (appointmentId: string) => {
     navigation.navigate('AppointmentDetails', { id: appointmentId });
+  };
+
+  const navigateToChat = (patientId: string, patientName: string) => {
+    // Navigate to the Chat tab and then to the ChatDetails screen
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Chat',
+        params: {
+          screen: 'ChatDetails',
+          params: {
+            patientId,
+            patientName
+          }
+        }
+      })
+    );
   };
 
   // Format date for display
@@ -230,13 +246,7 @@ const DoctorAppointmentsScreen: React.FC = () => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.actionButton, styles.secondaryButton]}
-                  onPress={() => navigation.getParent()?.navigate('Chat', { 
-                    screen: 'ChatDetails',
-                    params: {
-                      patientId: item.patientId, 
-                      patientName: item.patientName 
-                    }
-                  })}
+                  onPress={() => navigateToChat(item.patientId, item.patientName)}
                 >
                   <Ionicons name="chatbubble-outline" size={16} color="#007bff" />
                   <Text style={styles.chatButtonText}>Message</Text>

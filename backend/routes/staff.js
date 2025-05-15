@@ -25,10 +25,7 @@ router.delete('/:id', staffController.deleteStaff);
 
 // Doctor management routes
 router.get('/manage/doctors', staffController.getAllDoctors);
-router.get('/manage/doctors/registrations', staffController.getDoctorRegistrations);
 router.get('/manage/doctors/:id', staffController.getDoctorById);
-router.put('/manage/doctors/:id/approve', staffController.approveDoctor);
-router.put('/manage/doctors/:id/reject', staffController.rejectDoctor);
 router.put('/manage/doctors/:id/status', staffController.updateDoctorStatus);
 
 // Patient management routes
@@ -39,9 +36,5 @@ router.put('/manage/patients/:id/status', staffController.updatePatientStatus);
 router.get('/manage/appointments', staffController.getStaffAppointments);
 router.get('/manage/appointments/:id', staffController.getAppointmentById);
 router.put('/manage/appointments/:id/status', staffController.updateAppointmentStatus);
-
-// Clinic management routes
-router.get('/manage/clinic', staffController.getClinicInfo);
-router.put('/manage/clinic', staffController.updateClinicInfo);
 
 module.exports = router;

@@ -14,6 +14,8 @@ import DoctorProfileScreen from '../screens/doctor/DoctorProfileScreen';
 import DoctorScheduleScreen from '../screens/doctor/DoctorScheduleScreen';
 import DoctorAppointmentDetailsScreen from '../screens/doctor/DoctorAppointmentDetailsScreen';
 import DoctorMedicalRecordScreen from '../screens/doctor/DoctorMedicalRecordScreen';
+import AddScheduleScreen from '../screens/doctor/AddScheduleScreen';
+import ManageScheduleScreen from '../screens/doctor/ManageScheduleScreen';
 
 // Create stacks for complex navigation flows
 const HomeStack = createNativeStackNavigator();
@@ -35,6 +37,16 @@ const HomeStackNavigator = () => {
         name="Schedule"
         component={DoctorScheduleScreen}
         options={{ title: 'My Schedule' }}
+      />
+      <HomeStack.Screen
+        name="AddSchedule"
+        component={AddScheduleScreen}
+        options={{ title: 'Add Schedule' }}
+      />
+      <HomeStack.Screen
+        name="ManageSchedule"
+        component={ManageScheduleScreen}
+        options={{ title: 'Manage Schedule' }}
       />
     </HomeStack.Navigator>
   );
@@ -81,8 +93,7 @@ const PatientStackNavigator = () => {
         name="PatientDetails"
         component={DoctorPatientDetailsScreen}
         options={({ route }: any) => ({ 
-          title: route.params?.patientName || 'Patient Details'
-        })}
+          title: route.params?.patientName || 'Patient Details'})}
       />
       <PatientStack.Screen
         name="MedicalRecord"

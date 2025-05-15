@@ -18,7 +18,7 @@ interface AuthContextType {
   register: (userData: any, userType: 'patient') => Promise<void>;
   logout: () => void;
   updateUserProfile: (userData: Partial<User>) => void;
-  resetPassword: (email: string, userType: 'patient' | 'doctor' | 'staff', newPassword: string) => Promise<void>;
+  resetPassword: (email: string, userType: 'patient' | 'doctor' | 'staff' | null, newPassword: string) => Promise<void>;
 }
 
 // Create the auth context
@@ -60,63 +60,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadStoredAuth();
   }, []);
 
-  // Updated login function that attempts to login with each user type
+  // Simplified login function that uses the unified login endpoint
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
       
-      // Define the order in which to try user types
-      const userTypes: ('patient' | 'doctor' | 'staff')[] = ['patient', 'doctor', 'staff'];
+      // Call the unified login endpoint that will determine user type
+      const response = await authService.login(email, password);
       
-      let loggedIn = false;
-      let lastError = null;
+      // Extract data from the response
+      const { user, token, userType } = response;
       
-      // Try each user type until successful
-      for (const type of userTypes) {
-        try {
-          console.log(`Attempting login as ${type}...`);
-          const response = await authService.login(email, password, type);
-          
-          // If we get here, login was successful
-          const { user, token } = response;
-          
-          // Save to state
-          setUser(user);
-          setToken(token);
-          setUserType(type);
-          
-          // Set auth header for API calls
-          setAuthToken(token);
-          
-          // Store in AsyncStorage for persistence
-          await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-          await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
-          await AsyncStorage.setItem(USER_TYPE_STORAGE_KEY, type);
-          
-          console.log(`Login successful as ${type}`);
-          loggedIn = true;
-          break;
-        } catch (error: any) {
-          // If it's not a 404 error (which means "user not found"), 
-          // we should not try other user types
-          if (error.response && error.response.status !== 404) {
-            lastError = error;
-            break;
-          }
-          
-          lastError = error;
-          console.log(`Login as ${type} failed:`, error.message);
-        }
-      }
+      // Save to state
+      setUser(user);
+      setToken(token);
+      setUserType(userType);
       
-      if (!loggedIn) {
-        console.error('Login failed for all user types');
-        throw lastError || new Error('No user account found with this email.');
-      }
+      // Set auth header for API calls
+      setAuthToken(token);
+      
+      // Store in AsyncStorage for persistence
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+      await AsyncStorage.setItem(USER_TYPE_STORAGE_KEY, userType);
+      
+      console.log(`Login successful as ${userType}`);
       
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      
+      // Check if this is a Network Error and try with the alternative URL
+      if (error instanceof Error && error.message === 'Network Error') {
+        try {        console.log('Network error detected during login. Trying with alternative API URL...');
+          
+          // Import the API URL switching and discovery functions
+          const { switchApiBaseUrl, findWorkingApiServer, DEFAULT_DEVICE_URL } = require('../services/api');
+          
+          // Try the opposite URL setting (if using localhost, switch to IP and vice versa)
+          const isCurrentlyUsingLocalhost = await AsyncStorage.getItem('@PulseCare:usingLocalhost');
+          const shouldUseIpAddress = isCurrentlyUsingLocalhost !== 'false'; // Default to IP if not set
+          
+          // Try to find a working server
+          const newUrl = await findWorkingApiServer();
+          
+          // If found, use it
+          if (typeof newUrl === 'string') {
+            await switchApiBaseUrl(newUrl);
+          } else {
+            // Fall back to default URL based on device type
+            const { DEFAULT_DEVICE_URL } = require('../services/api');
+            await switchApiBaseUrl(DEFAULT_DEVICE_URL);
+          }
+          
+          // Store the new setting
+          await AsyncStorage.setItem('@PulseCare:usingLocalhost', String(!shouldUseIpAddress));
+            console.log(`Switched to ${shouldUseIpAddress ? 'IP address' : 'localhost'} URL`);
+          
+          try {
+            // Try login again with the new URL
+            const retryResponse = await authService.login(email, password);
+            
+            // If successful, update state and storage
+            const { user, token, userType } = retryResponse;
+            setUser(user);
+            setToken(token);
+            setUserType(userType);
+            setAuthToken(token);            
+            // Store user data in AsyncStorage after successful retry
+            await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+            await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+            await AsyncStorage.setItem(USER_TYPE_STORAGE_KEY, userType);
+          } catch (innerError) {
+            console.error('Error during login retry:', innerError);
+            throw new Error('Login failed. Please check your connection or credentials and try again.');
+          }
+          
+          console.log(`Login successful after URL switch, logged in as ${userType}`);
+          return;
+        } catch (retryError) {
+          console.error('Login retry also failed:', retryError);
+          throw retryError; // If retry fails, throw the new error
+        }
+      }
+      
+      throw error; // Throw the original error if not a network error or retry failed
     } finally {
       setIsLoading(false);
     }
@@ -147,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Reset password function
-  const resetPassword = async (email: string, type: 'patient' | 'doctor' | 'staff', newPassword: string) => {
+  const resetPassword = async (email: string, type: 'patient' | 'doctor' | 'staff' | null, newPassword: string) => {
     try {
       setIsLoading(true);
       await authService.resetPassword(email, type, newPassword);

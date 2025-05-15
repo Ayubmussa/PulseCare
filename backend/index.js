@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 // Import routes
+const authRoutes = require('./routes/auth');
 const patientsRoutes = require('./routes/patients');
 const doctorsRoutes = require('./routes/doctors');
 const appointmentsRoutes = require('./routes/appointments');
@@ -26,6 +27,7 @@ app.get('/', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes); // Add the unified auth routes
 app.use('/api/patients', patientsRoutes);
 app.use('/api/doctors', doctorsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
@@ -40,9 +42,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Start server - listen on all interfaces (0.0.0.0)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on 0.0.0.0:${PORT} (accessible from all network interfaces)`);
 });
 
 module.exports = app;

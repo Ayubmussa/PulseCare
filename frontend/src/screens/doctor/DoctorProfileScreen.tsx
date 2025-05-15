@@ -81,16 +81,26 @@ const DoctorProfileScreen: React.FC = () => {
   };
 
   const handleEditProfile = () => {
+    // Navigate within the Profile stack to the EditProfile screen
     navigation.navigate('EditProfile', { profile, onReturn: loadProfile });
   };
 
   const handleChangePassword = () => {
-    navigation.navigate('ChangePassword');
+    navigation.navigate('ChangePassword', { userId: user?.id, onReturn: loadProfile });
   };
 
-  const handleLogout = () => {
-    logout();
-    navigation.navigate('Login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Navigate to the Login screen after logout completes
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }]
+      });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      Alert.alert('Error', 'Failed to log out. Please try again.');
+    }
   };
 
   if (isLoading) {
