@@ -10,7 +10,25 @@ const getAllStaffMembers = async (req, res) => {
     
     if (error) throw error;
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations
+    const transformedData = data.map(staff => ({
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      phoneNumber: staff.phone,
+      role: staff.role,
+      employeeId: staff.employee_id || 'EMP-' + staff.id.slice(0, 8).toUpperCase(),
+      department: staff.department || 'General',
+      joinDate: staff.join_date || staff.created_at?.split('T')[0],
+      workHours: staff.work_hours || '9:00 AM - 5:00 PM',
+      supervisor: staff.supervisor || 'Not assigned',
+      image: staff.image || null,
+      status: staff.status || 'active',
+      clinic_id: staff.clinic_id,
+      created_at: staff.created_at
+    }));
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -32,7 +50,25 @@ const getStaffById = async (req, res) => {
       return res.status(404).json({ message: 'Staff member not found' });
     }
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations with default values for missing fields
+    const transformedData = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phone, // Map phone to phoneNumber for UI compatibility
+      role: data.role,
+      employeeId: data.employee_id || 'EMP-' + data.id.slice(0, 8).toUpperCase(),
+      department: data.department || 'General',
+      joinDate: data.join_date || data.created_at?.split('T')[0], // Fallback to created_at
+      workHours: data.work_hours || '9:00 AM - 5:00 PM',
+      supervisor: data.supervisor || 'Not assigned',
+      image: data.image || null,
+      status: data.status || 'active',
+      clinic_id: data.clinic_id,
+      created_at: data.created_at
+    };
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -46,18 +82,13 @@ const createStaff = async (req, res) => {
     // Basic validation
     if (!name || !email || !password || !role) {
       return res.status(400).json({ message: 'Name, email, password, and role are required' });
-    }
-
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Prepare the staff data
+    }    // Prepare the staff data (using plain text password for consistency)
     const staffData = { 
       name, 
       email, 
       phone, 
       role, 
-      password: hashedPassword 
+      password 
     };
     
     // Note: clinic_id is intentionally not included here to allow the database to generate it
@@ -83,11 +114,49 @@ const createStaff = async (req, res) => {
 const updateStaff = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, role } = req.body;
+    const { 
+      name, 
+      email, 
+      phone, 
+      phoneNumber, // Support both field names
+      role,
+      employeeId,
+      employee_id, // Support both field names
+      department,
+      joinDate,
+      join_date, // Support both field names
+      workHours,
+      work_hours, // Support both field names
+      supervisor,
+      image,
+      status
+    } = req.body;
+    
+    // Use the correct field names for the database
+    const updateData = {
+      name,
+      email,
+      phone: phone || phoneNumber,
+      role,
+      employee_id: employee_id || employeeId,
+      department,
+      join_date: join_date || joinDate,
+      work_hours: work_hours || workHours,
+      supervisor,
+      image,
+      status
+    };
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
     
     const { data, error } = await supabase
       .from('staff')
-      .update({ name, email, phone, role })
+      .update(updateData)
       .eq('id', id)
       .select();
     
@@ -97,7 +166,25 @@ const updateStaff = async (req, res) => {
       return res.status(404).json({ message: 'Staff member not found' });
     }
     
-    res.status(200).json(data[0]);
+    // Transform response to match UI expectations
+    const transformedData = {
+      id: data[0].id,
+      name: data[0].name,
+      email: data[0].email,
+      phoneNumber: data[0].phone,
+      role: data[0].role,
+      employeeId: data[0].employee_id || 'EMP-' + data[0].id.slice(0, 8).toUpperCase(),
+      department: data[0].department || 'General',
+      joinDate: data[0].join_date || data[0].created_at?.split('T')[0],
+      workHours: data[0].work_hours || '9:00 AM - 5:00 PM',
+      supervisor: data[0].supervisor || 'Not assigned',
+      image: data[0].image || null,
+      status: data[0].status || 'active',
+      clinic_id: data[0].clinic_id,
+      created_at: data[0].created_at
+    };
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -143,10 +230,8 @@ const loginStaff = async (req, res) => {
     if (!data) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
-    
-    // Check password with bcrypt
-    const isPasswordValid = await bcrypt.compare(password, data.password);
-    if (!isPasswordValid) {
+      // Check password (plain text comparison for consistency)
+    if (data.password !== password) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     
@@ -192,14 +277,10 @@ const resetPassword = async (req, res) => {
     if (!staff) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
-    
-    // Hash the new password using bcrypt
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-    // Update the password directly
+      // Update the password directly (plain text for consistency)
     const { data, error } = await supabase
       .from('staff')
-      .update({ password: hashedPassword })
+      .update({ password: newPassword })
       .eq('id', staff.id);
     
     if (error) throw error;
@@ -224,7 +305,28 @@ const getAllDoctors = async (req, res) => {
     
     if (error) throw error;
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations
+    const transformedData = data.map(doctor => ({
+      id: doctor.id,
+      name: doctor.name,
+      email: doctor.email,
+      phone: doctor.phone,
+      specialty: doctor.specialty,
+      experience: doctor.experience || 0,
+      education: doctor.education || 'Not specified',
+      bio: doctor.bio || 'No bio available',
+      officeHours: doctor.office_hours || 'Please contact for availability',
+      officeLocation: doctor.office_location || 'Location not specified',
+      officePhone: doctor.office_phone || doctor.phone,
+      acceptingNewPatients: doctor.accepting_new_patients !== undefined ? doctor.accepting_new_patients : true,
+      image: doctor.image || null,
+      rating: doctor.rating || 0.0,
+      reviewCount: doctor.review_count || 0,
+      availability: doctor.availability || {},
+      created_at: doctor.created_at
+    }));
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -238,11 +340,9 @@ const getDoctorById = async (req, res) => {
       .from('doctors')
       .select(`
         *,
-        specialties:specialty_id (id, name),
         appointments:appointments (
           id, 
-          date,
-          time,
+          date_time,
           status,
           patients:patient_id (id, name)
         )
@@ -256,7 +356,29 @@ const getDoctorById = async (req, res) => {
       return res.status(404).json({ message: 'Doctor not found' });
     }
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations with default values for missing fields
+    const transformedData = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      specialty: data.specialty,
+      experience: data.experience || 0,
+      education: data.education || 'Not specified',
+      bio: data.bio || 'No bio available',
+      officeHours: data.office_hours || 'Please contact for availability',
+      officeLocation: data.office_location || 'Location not specified',
+      officePhone: data.office_phone || data.phone,
+      acceptingNewPatients: data.accepting_new_patients !== undefined ? data.accepting_new_patients : true,
+      image: data.image || null,
+      rating: data.rating || 0.0,
+      reviewCount: data.review_count || 0,
+      availability: data.availability || {},
+      appointments: data.appointments || [],
+      created_at: data.created_at
+    };
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -311,7 +433,21 @@ const getAllPatients = async (req, res) => {
     
     if (error) throw error;
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations
+    const transformedData = data.map(patient => ({
+      id: patient.id,
+      name: patient.name,
+      email: patient.email,
+      phone: patient.phone,
+      dateOfBirth: patient.date_of_birth,
+      bloodType: patient.blood_type || 'Unknown',
+      address: patient.address || 'Not provided',
+      emergencyContact: patient.emergency_contact || 'Not provided',
+      profileImage: patient.profile_image || null,
+      created_at: patient.created_at
+    }));
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

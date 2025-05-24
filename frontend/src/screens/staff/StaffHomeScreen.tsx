@@ -98,10 +98,29 @@ const StaffHomeScreen = () => {
       // Filter pending appointments
       const pending = appointmentsResponse.filter((apt: Appointment) => apt.status === 'pending');
       setPendingAppointments(pending.length);
-      
-      // Fetch upcoming appointments for display
+        // Fetch upcoming appointments for display
       const upcomingResponse = await staffService.getStaffAppointments();
-      const upcoming = upcomingResponse
+      
+      // Transform appointments data to include separate date/time fields
+      const transformedAppointments = upcomingResponse.map((apt: any) => {
+        // Extract date and time from date_time (format: "YYYY-MM-DDThh:mm")
+        const dateTime = new Date(apt.date_time);
+        const formattedDate = dateTime.toISOString().split('T')[0];
+        const formattedTime = dateTime.toTimeString().substring(0, 5);
+        
+        return {
+          ...apt,
+          // Add backwards compatibility fields
+          patientId: apt.patient_id,
+          patientName: apt.patients?.name || 'Unknown Patient',
+          doctorId: apt.doctor_id,
+          doctorName: apt.doctors?.name || 'Unknown Doctor',
+          date: formattedDate,
+          time: formattedTime,
+        };
+      });
+      
+      const upcoming = transformedAppointments
         .filter((apt: Appointment) => apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'checked-in')
         .sort((a: Appointment, b: Appointment) => {
           return new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime();
@@ -119,11 +138,10 @@ const StaffHomeScreen = () => {
       // Fetch total patients count
       const patientsResponse = await patientService.getAllPatients();
       setTotalPatients(patientsResponse.length);
-      
-      // Get recent patient activities
+        // Get recent patient activities
       // This would typically come from a dedicated API endpoint
       // For now, we'll derive it from recent appointments
-      const recentActivities = upcomingResponse
+      const recentActivities = transformedAppointments
         .slice(0, 3)
         .map((apt: Appointment) => ({
           id: apt.patientId,

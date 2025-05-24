@@ -13,7 +13,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { appointmentService } from '../../services/api';
+import { appointmentService, doctorService } from '../../services/api';
 
 interface Appointment {
   id: string;
@@ -37,17 +37,27 @@ const DoctorAppointmentsScreen: React.FC = () => {
   useEffect(() => {
     loadAppointments();
   }, []);
-
   const loadAppointments = async () => {
     try {
       setIsLoading(true);
       
       if (user?.id) {
-        // Using getAllAppointments and filtering for the current doctor
-        const allAppointments = await appointmentService.getAllAppointments();
-        // Filter appointments for the current doctor
-        const doctorAppointments = allAppointments.filter((apt: any) => apt.doctorId === user.id);
-        setAppointments(doctorAppointments);
+        // Use the dedicated doctor appointments endpoint for better performance
+        const doctorAppointments = await doctorService.getDoctorAppointments(user.id);
+          // Transform the backend response to match the component's expected format
+        const formattedAppointments = doctorAppointments.map((apt: any) => ({
+          id: apt.id,
+          patientId: apt.patient_id,
+          patientName: apt.patients?.name || 'Unknown Patient',
+          // Extract date and time from date_time field (format: "YYYY-MM-DDThh:mm")
+          date: apt.date_time ? apt.date_time.split('T')[0] : '',
+          time: apt.date_time ? apt.date_time.split('T')[1].substring(0, 5) : '00:00',
+          reason: apt.reason || 'Medical consultation',
+          // Normalize status: treat 'booked' as 'scheduled'
+          status: apt.status === 'booked' ? 'scheduled' : apt.status || 'scheduled'
+        }));
+        
+        setAppointments(formattedAppointments);
       }
     } catch (error) {
       console.error('Failed to load appointments:', error);
@@ -91,20 +101,22 @@ const DoctorAppointmentsScreen: React.FC = () => {
     };
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
-
   // Format time for display
   const formatTime = (timeString: string) => {
-    const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
+    // Handle both HH:MM and HH:MM:SS formats
+    const timeParts = timeString.split(':');
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = timeParts[1] || '00';
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
   };
-
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled':
+      case 'booked':
         return '#007bff';
       case 'completed':
         return '#28a745';

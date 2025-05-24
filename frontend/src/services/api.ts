@@ -34,7 +34,7 @@ resetApiUrlPreferences()
 const generatePossibleServerUrls = async (port: number, path: string): Promise<string[]> => {
   // Create URLs with proper formatting
   const LOCALHOST_URL = `http://localhost:${port}${path}`;
-  const ACTUAL_IP_URL = `http://192.168.3.16:${port}${path}`;  // Your actual machine IP address
+  const ACTUAL_IP_URL = `http://172.20.26.6:${port}${path}`;  // Your actual machine IP address
   
   // Return prioritized array of URLs to try (actual IP first for mobile devices)
   const urls = [ACTUAL_IP_URL, LOCALHOST_URL];
@@ -48,7 +48,7 @@ const API_PATH = '/api';
 
 // Define URLs
 const LOCALHOST_URL = 'http://localhost:5000/api';
-const ACTUAL_IP_URL = 'http://192.168.3.16:5000/api';  // Your actual machine IP address
+const ACTUAL_IP_URL = 'http://172.20.26.6:5000/api';  // Your actual machine IP address
 
 // Use the actual IP as default for better mobile device connectivity
 const DEFAULT_DEVICE_URL = ACTUAL_IP_URL;

@@ -24,6 +24,9 @@ const RegisterScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [bloodType, setBloodType] = useState('');
+  const [address, setAddress] = useState('');
+  const [emergencyContact, setEmergencyContact] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -58,14 +61,14 @@ const RegisterScreen: React.FC = () => {
     }
 
     try {
-      setIsLoading(true);
-      
-      const userData = {
+      setIsLoading(true);      const userData = {
         name: fullName,
         email,
         phone,
         date_of_birth: dateOfBirth,
         password,
+        // TODO: Additional fields (bloodType, address, emergencyContact) will be stored 
+        // once database schema is updated to include these columns
       };
       
       // Add more detailed error logging
@@ -157,9 +160,7 @@ const RegisterScreen: React.FC = () => {
               onChangeText={setPhone}
               keyboardType="phone-pad"
             />
-          </View>
-
-          <View style={styles.inputContainer}>
+          </View>          <View style={styles.inputContainer}>
             <Ionicons name="calendar-outline" size={20} color="#6c757d" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
@@ -167,6 +168,41 @@ const RegisterScreen: React.FC = () => {
               placeholderTextColor="#999"
               value={dateOfBirth}
               onChangeText={setDateOfBirth}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="water-outline" size={20} color="#6c757d" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Blood Type (e.g., A+, B-, O+) - Optional"
+              placeholderTextColor="#999"
+              value={bloodType}
+              onChangeText={setBloodType}
+              autoCapitalize="characters"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="location-outline" size={20} color="#6c757d" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Address - Optional"
+              placeholderTextColor="#999"
+              value={address}
+              onChangeText={setAddress}
+              multiline={false}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="people-outline" size={20} color="#6c757d" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Emergency Contact (Name & Phone) - Optional"
+              placeholderTextColor="#999"
+              value={emergencyContact}
+              onChangeText={setEmergencyContact}
             />
           </View>
 

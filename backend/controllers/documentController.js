@@ -52,7 +52,7 @@ const getDocumentById = async (req, res) => {
 // Upload a new document
 const uploadDocument = async (req, res) => {
   try {
-    const { patient_id, document_name, document_type, doctor_id, notes } = req.body;
+    const { patient_id, document_name, document_type, doctor_id, notes } = req.fields || req.body;
     
     // Basic validation
     if (!patient_id || !document_name || !document_type) {
@@ -63,17 +63,25 @@ const uploadDocument = async (req, res) => {
     
     let document_url = null;
     
-    // Check if a file was uploaded
-    if (req.file) {
+    // Check if a file was uploaded (formidable puts files in req.files)
+    const uploadedFile = req.files?.document || req.files?.file;
+    
+    if (uploadedFile) {
+      // Handle both single file and array (formidable can return either)
+      const file = Array.isArray(uploadedFile) ? uploadedFile[0] : uploadedFile;
+      
+      // Read file content
+      const fileBuffer = fs.readFileSync(file.filepath);
+      
       // Generate a filename based on the original name to maintain file extension
-      const fileExtension = path.extname(req.file.originalname);
+      const fileExtension = path.extname(file.originalFilename || file.name);
       const fileName = `${Date.now()}${fileExtension}`;
       
       // Upload file to Supabase Storage - using patient_documents bucket
       const { data, error } = await supabase.storage
         .from('patient_documents')
-        .upload(`patients/${patient_id}/${fileName}`, req.file.buffer, {
-          contentType: req.file.mimetype,
+        .upload(`patients/${patient_id}/${fileName}`, fileBuffer, {
+          contentType: file.mimetype,
           upsert: false
         });
       
@@ -85,9 +93,16 @@ const uploadDocument = async (req, res) => {
         .getPublicUrl(`patients/${patient_id}/${fileName}`);
       
       document_url = urlData.publicUrl;
-    } else if (req.body.document_url) {
+      
+      // Clean up temporary file
+      try {
+        fs.unlinkSync(file.filepath);
+      } catch (cleanupError) {
+        console.warn('Could not clean up temp file:', cleanupError.message);
+      }
+    } else if (req.body.document_url || req.fields?.document_url) {
       // If no file but URL provided (e.g., from frontend that uploaded directly)
-      document_url = req.body.document_url;
+      document_url = req.body.document_url || req.fields.document_url;
     } else {
       return res.status(400).json({ message: 'No document file or URL provided' });
     }

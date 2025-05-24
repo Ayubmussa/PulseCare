@@ -9,7 +9,28 @@ const getAllDoctors = async (req, res) => {
     
     if (error) throw error;
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations
+    const transformedData = data.map(doctor => ({
+      id: doctor.id,
+      name: doctor.name,
+      email: doctor.email,
+      phone: doctor.phone,
+      specialty: doctor.specialty,
+      experience: doctor.experience || 0,
+      education: doctor.education || 'Not specified',
+      bio: doctor.bio || 'No bio available',
+      officeHours: doctor.office_hours || 'Please contact for availability',
+      officeLocation: doctor.office_location || 'Location not specified',
+      officePhone: doctor.office_phone || doctor.phone,
+      acceptingNewPatients: doctor.accepting_new_patients !== undefined ? doctor.accepting_new_patients : true,
+      image: doctor.image || null,
+      rating: doctor.rating || 0.0,
+      reviewCount: doctor.review_count || 0,
+      availability: doctor.availability || {},
+      created_at: doctor.created_at
+    }));
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -31,7 +52,28 @@ const getDoctorById = async (req, res) => {
       return res.status(404).json({ message: 'Doctor not found' });
     }
     
-    res.status(200).json(data);
+    // Transform data to match UI expectations with default values for missing fields
+    const transformedData = {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      specialty: data.specialty,
+      experience: data.experience || 0,
+      education: data.education || 'Not specified',
+      bio: data.bio || 'No bio available',
+      officeHours: data.office_hours || 'Please contact for availability',
+      officeLocation: data.office_location || 'Location not specified',
+      officePhone: data.office_phone || data.phone, // Fallback to main phone
+      acceptingNewPatients: data.accepting_new_patients !== undefined ? data.accepting_new_patients : true,
+      image: data.image || null,
+      rating: data.rating || 0.0,
+      reviewCount: data.review_count || 0,
+      availability: data.availability || {},
+      created_at: data.created_at
+    };
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -64,11 +106,56 @@ const createDoctor = async (req, res) => {
 const updateDoctor = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, specialty, phone } = req.body;
+    const { 
+      name, 
+      email, 
+      specialty, 
+      phone,
+      experience,
+      education,
+      bio,
+      officeHours,
+      office_hours, // Support both field names
+      officeLocation,
+      office_location, // Support both field names
+      officePhone,
+      office_phone, // Support both field names
+      acceptingNewPatients,
+      accepting_new_patients, // Support both field names
+      image,
+      rating,
+      reviewCount,
+      review_count // Support both field names
+    } = req.body;
+    
+    // Use the correct field names for the database
+    const updateData = {
+      name,
+      email,
+      specialty,
+      phone,
+      experience,
+      education,
+      bio,
+      office_hours: office_hours || officeHours,
+      office_location: office_location || officeLocation,
+      office_phone: office_phone || officePhone,
+      accepting_new_patients: accepting_new_patients !== undefined ? accepting_new_patients : acceptingNewPatients,
+      image,
+      rating,
+      review_count: review_count !== undefined ? review_count : reviewCount
+    };
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
     
     const { data, error } = await supabase
       .from('doctors')
-      .update({ name, email, specialty, phone })
+      .update(updateData)
       .eq('id', id)
       .select();
     
@@ -78,7 +165,28 @@ const updateDoctor = async (req, res) => {
       return res.status(404).json({ message: 'Doctor not found' });
     }
     
-    res.status(200).json(data[0]);
+    // Transform response to match UI expectations
+    const transformedData = {
+      id: data[0].id,
+      name: data[0].name,
+      email: data[0].email,
+      phone: data[0].phone,
+      specialty: data[0].specialty,
+      experience: data[0].experience || 0,
+      education: data[0].education || 'Not specified',
+      bio: data[0].bio || 'No bio available',
+      officeHours: data[0].office_hours || 'Please contact for availability',
+      officeLocation: data[0].office_location || 'Location not specified',
+      officePhone: data[0].office_phone || data[0].phone,
+      acceptingNewPatients: data[0].accepting_new_patients !== undefined ? data[0].accepting_new_patients : true,
+      image: data[0].image || null,
+      rating: data[0].rating || 0.0,
+      reviewCount: data[0].review_count || 0,
+      availability: data[0].availability || {},
+      created_at: data[0].created_at
+    };
+    
+    res.status(200).json(transformedData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
