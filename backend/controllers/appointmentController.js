@@ -87,8 +87,7 @@ const updateAppointment = async (req, res) => {
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: 'No update data provided' });
     }
-    
-    // Format the date_time field if it exists but doesn't have seconds
+      // Format the date_time field if it exists but doesn't have seconds
     if (updateData.date_time && !updateData.date_time.endsWith('Z')) {
       // Check if it's missing seconds
       if (updateData.date_time.split(':').length < 3) {
@@ -104,6 +103,77 @@ const updateAppointment = async (req, res) => {
         console.error('Error formatting date_time:', error);
         return res.status(400).json({ 
           message: 'Invalid date_time format. Please use ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ)' 
+        });
+      }
+    }
+
+    // Handle start_time and end_time fields - convert time strings to full timestamps
+    if (updateData.start_time && typeof updateData.start_time === 'string' && updateData.start_time.length <= 5) {
+      // If start_time is just a time string like "15:30", convert it to a full timestamp
+      try {
+        let baseDate;
+        if (updateData.date_time) {
+          baseDate = new Date(updateData.date_time);
+        } else {
+          // Get the current appointment's date_time as base
+          const { data: currentAppt, error: fetchError } = await supabase
+            .from('appointments')
+            .select('date_time')
+            .eq('id', id)
+            .single();
+          
+          if (fetchError || !currentAppt) {
+            console.error('Error fetching current appointment for start_time conversion:', fetchError);
+            return res.status(400).json({ 
+              message: 'Cannot convert start_time: unable to determine base date' 
+            });
+          }
+          baseDate = new Date(currentAppt.date_time);
+        }
+        
+        const [hours, minutes] = updateData.start_time.split(':');
+        baseDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        updateData.start_time = baseDate.toISOString();
+        console.log('Formatted start_time:', updateData.start_time);
+      } catch (error) {
+        console.error('Error formatting start_time:', error);
+        return res.status(400).json({ 
+          message: 'Invalid start_time format. Please use HH:MM format or full timestamp' 
+        });
+      }
+    }
+
+    if (updateData.end_time && typeof updateData.end_time === 'string' && updateData.end_time.length <= 5) {
+      // If end_time is just a time string like "16:00", convert it to a full timestamp
+      try {
+        let baseDate;
+        if (updateData.date_time) {
+          baseDate = new Date(updateData.date_time);
+        } else {
+          // Get the current appointment's date_time as base
+          const { data: currentAppt, error: fetchError } = await supabase
+            .from('appointments')
+            .select('date_time')
+            .eq('id', id)
+            .single();
+          
+          if (fetchError || !currentAppt) {
+            console.error('Error fetching current appointment for end_time conversion:', fetchError);
+            return res.status(400).json({ 
+              message: 'Cannot convert end_time: unable to determine base date' 
+            });
+          }
+          baseDate = new Date(currentAppt.date_time);
+        }
+        
+        const [hours, minutes] = updateData.end_time.split(':');
+        baseDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        updateData.end_time = baseDate.toISOString();
+        console.log('Formatted end_time:', updateData.end_time);
+      } catch (error) {
+        console.error('Error formatting end_time:', error);
+        return res.status(400).json({ 
+          message: 'Invalid end_time format. Please use HH:MM format or full timestamp' 
         });
       }
     }

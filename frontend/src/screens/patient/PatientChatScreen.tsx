@@ -19,13 +19,16 @@ import { useAuth } from '../../context/AuthContext';
 // Define TypeScript interfaces for the conversation data
 interface Conversation {
   id: string;
-  doctorId: string;
-  doctorName: string;
+  doctorId?: string;
+  doctorName?: string;
+  patientId?: string;
+  patientName?: string;
   avatar: string;
-  specialty: string;
+  specialty?: string;
   lastMessage: string;
   lastMessageTime: string;
   unread: number;
+  type: string;
 }
 
 // Define navigation type using NativeStackNavigationProp for proper typing
@@ -51,7 +54,9 @@ const PatientChatScreen = () => {
         return;
       }
       
+      console.log('Fetching conversations for user ID:', user.id);
       const data = await chatService.getUserConversations(user.id, 'patient');
+      console.log('Conversations data received:', data);
       setConversations(data);
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -60,19 +65,17 @@ const PatientChatScreen = () => {
       setLoading(false);
     }
   };
-
   const navigateToChatDetails = (conversation: Conversation) => {
     // Use navigation.navigate with nested screen params to ensure it works from any context
     navigation.navigate('Chat', {
       screen: 'ChatDetails',
       params: {
         conversationId: conversation.id,
-        doctorId: conversation.doctorId,
-        doctorName: conversation.doctorName
+        doctorId: conversation.doctorId || conversation.id, // Use doctorId if available, fallback to id
+        doctorName: conversation.doctorName || 'Doctor' // Provide fallback name
       }
     });
   };
-
   const handleSearch = (text: string) => {
     setSearchQuery(text);
     // Filter conversations based on search query
@@ -80,7 +83,7 @@ const PatientChatScreen = () => {
       fetchConversations(); // Reset to all conversations
     } else {
       const filtered = conversations.filter(
-        conversation => conversation.doctorName.toLowerCase().includes(text.toLowerCase())
+        conversation => (conversation.doctorName || conversation.patientName || 'Unknown').toLowerCase().includes(text.toLowerCase())
       );
       setConversations(filtered);
     }
@@ -95,11 +98,11 @@ const PatientChatScreen = () => {
       
       <View style={styles.conversationInfo}>
         <View style={styles.conversationHeader}>
-          <Text style={styles.doctorName}>{item.doctorName}</Text>
+          <Text style={styles.doctorName}>{item.doctorName || 'Doctor'}</Text>
           <Text style={styles.messageTime}>{item.lastMessageTime}</Text>
         </View>
         
-        <Text style={styles.specialty}>{item.specialty}</Text>
+        <Text style={styles.specialty}>{item.specialty || 'General'}</Text>
         
         <View style={styles.messageContainer}>
           <Text 

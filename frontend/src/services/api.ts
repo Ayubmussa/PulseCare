@@ -34,7 +34,7 @@ resetApiUrlPreferences()
 const generatePossibleServerUrls = async (port: number, path: string): Promise<string[]> => {
   // Create URLs with proper formatting
   const LOCALHOST_URL = `http://localhost:${port}${path}`;
-  const ACTUAL_IP_URL = `http://172.20.26.6:${port}${path}`;  // Your actual machine IP address
+  const ACTUAL_IP_URL = `http://192.168.3.24:${port}${path}`;  // Your actual machine IP address
   
   // Return prioritized array of URLs to try (actual IP first for mobile devices)
   const urls = [ACTUAL_IP_URL, LOCALHOST_URL];
@@ -48,7 +48,7 @@ const API_PATH = '/api';
 
 // Define URLs
 const LOCALHOST_URL = 'http://localhost:5000/api';
-const ACTUAL_IP_URL = 'http://172.20.26.6:5000/api';  // Your actual machine IP address
+const ACTUAL_IP_URL = 'http://192.168.3.24:5000/api';  // Your actual machine IP address
 
 // Use the actual IP as default for better mobile device connectivity
 const DEFAULT_DEVICE_URL = ACTUAL_IP_URL;
@@ -909,15 +909,18 @@ export const chatService = {
       console.error('Error fetching conversation messages:', error);
       throw error;
     }
-  },
-  sendMessage: async (senderId: string, text: string, recipientId: string) => {
+  },  sendMessage: async (senderId: string, text: string, recipientId: string, senderType?: 'patient' | 'doctor' | 'staff') => {
     try {
       console.log(`Sending message with ID ${senderId} to recipient ${recipientId}`);
+      
+      // Determine sender type if not provided
+      // This is a simple heuristic - in a real app you might want to pass this explicitly
+      const determinedSenderType = senderType || 'patient'; // Default to patient for backward compatibility
       
       const messageData = {
         sender_id: senderId,
         recipient_id: recipientId,
-        sender_type: 'patient',
+        sender_type: determinedSenderType,
         content: text
       };
       

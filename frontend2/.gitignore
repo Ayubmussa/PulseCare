@@ -1,6 +1,6 @@
 node_modules
 package-lock.json
+postcss.config.js
+tailwind.config.js
 tsconfig.json
-.expo
-babel.config.js
-metro.config.js 
+build
